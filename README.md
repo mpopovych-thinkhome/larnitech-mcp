@@ -246,3 +246,14 @@ installations. Device types documented as unconfirmed genuinely are —
 see `get_docs` output and the per-type files.
 
 Not affiliated with or endorsed by Larnitech.
+
+## License
+
+[MIT](LICENSE)
+
+## Contact
+
+Mykhailo Popovych
+- Telegram: [t.me/M_Popovych_ThinkHome](https://t.me/M_Popovych_ThinkHome)
+- Phone (WhatsApp): +370 632 89 991, +380 99 333 99 96
+- Email: [m.popovych@thinkhome.io](mailto:m.popovych@thinkhome.io)
