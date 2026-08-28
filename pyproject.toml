@@ -1,0 +1,34 @@
+[project]
+name = "larnitech-mcp"
+version = "1.0.0b0"
+description = "MCP server for Larnitech smart-home controllers over API2"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Mykhailo Popovych", email = "m.popovych@thinkhome.io" }]
+keywords = ["mcp", "larnitech", "smart-home", "home-automation", "api2"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Home Automation",
+]
+dependencies = [
+    "mcp>=2.0",
+    "websockets>=13",
+]
+
+[project.urls]
+Homepage = "https://github.com/mpopovych-thinkhome/larnitech-mcp"
+Issues = "https://github.com/mpopovych-thinkhome/larnitech-mcp/issues"
+
+[project.scripts]
+larnitech-mcp = "larnitech_mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["larnitech_mcp*"]
