@@ -15,7 +15,7 @@ are numbered in [bugs.md](bugs.md) — this file links to them, never restates.
 | WebSocket client or Python | Any WS client, or `pip install websockets` |
 
 Credentials per object are stored in `mcp/project_keys.json` — see
-[README.md](README.md).
+[README.md](https://github.com/mpopovych-thinkhome/larnitech-mcp#readme).
 
 ---
 

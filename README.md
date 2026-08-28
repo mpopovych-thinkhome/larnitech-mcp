@@ -1,6 +1,6 @@
 # Larnitech MCP
 
-**Version 1.0.0 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.0.1 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -85,21 +85,26 @@ needed by anyone.
 ## Install
 
 ```bash
+pip install larnitech-mcp
+```
+
+A virtual environment is worth using, since you'll point Claude Code at
+that interpreter's absolute path:
+
+```bash
+python -m venv ~/.venvs/larnitech
+~/.venvs/larnitech/bin/pip install larnitech-mcp     # Windows: Scripts\pip.exe
+```
+
+Your API keys, preferences, and any device notes the agent records live in
+`~/.larnitech-mcp/`, outside the package, so upgrading never touches them.
+
+To work on the server itself, install from a clone instead:
+
+```bash
 git clone https://github.com/mpopovych-thinkhome/larnitech-mcp.git
 cd larnitech-mcp
-python -m venv .venv
-```
-
-Then install into that venv — on Linux/macOS:
-
-```bash
-.venv/bin/python -m pip install -e .
-```
-
-On Windows:
-
-```bash
-.venv\Scripts\python.exe -m pip install -e .
+pip install -e .
 ```
 
 ## Where to get your API key
@@ -127,9 +132,9 @@ python -m larnitech_mcp auth "Home"
 ```
 
 `auth` prompts with hidden input and writes the key to
-`project_keys.json`, which is git-ignored. The key never passes through
-the chat transcript this way — prefer it over the `object_set_key` tool,
-which works but leaves the key in the session log.
+`~/.larnitech-mcp/project_keys.json`. The key never passes through the chat
+transcript this way — prefer it over the `object_set_key` tool, which works
+but leaves the key in the session log.
 
 For a controller on your LAN instead of via the cloud:
 
@@ -153,7 +158,7 @@ using the absolute path to the venv's Python:
 {
   "mcpServers": {
     "larnitech": {
-      "command": "/absolute/path/to/larnitech-mcp/.venv/bin/python",
+      "command": "/home/you/.venvs/larnitech/bin/python",
       "args": ["-m", "larnitech_mcp", "serve"]
     }
   }
@@ -163,7 +168,7 @@ using the absolute path to the venv's Python:
 On Windows the command is the `.exe`, with escaped backslashes:
 
 ```json
-"command": "C:\\path\\to\\larnitech-mcp\\.venv\\Scripts\\python.exe"
+"command": "C:\\Users\\you\\.venvs\\larnitech\\Scripts\\python.exe"
 ```
 
 It must be the top-level `mcpServers` key in `~/.claude.json` itself — a
@@ -214,10 +219,16 @@ messages.
 
 ## Device documentation
 
-`device-types/` holds one file per device type plus an index, covering the
-API2 status keys, XML attributes, script-side byte layout, and every quirk
-confirmed by live testing. `bugs.md` is a numbered registry of confirmed
-vendor bugs that the type files reference.
+`larnitech_mcp/docs/device-types/` holds one file per device type plus an
+index, covering the API2 status keys, XML attributes, script-side byte
+layout, and every quirk confirmed by live testing. `bugs.md` alongside it is
+a numbered registry of confirmed vendor bugs that the type files reference.
+Read them through `get_docs` rather than by path — that also picks up
+anything you've added locally.
+
+Notes the agent records with `add_docs_note` go to `~/.larnitech-mcp/docs/`,
+not into the installed package, so they survive upgrades. Your copy wins on
+read; everything you haven't edited still comes from the shipped set.
 
 This is a working knowledge base, not a spec: entries say plainly when
 something is confirmed live, observed but unexplained, or still unknown.

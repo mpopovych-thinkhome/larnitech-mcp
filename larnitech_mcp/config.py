@@ -9,10 +9,12 @@ This file holds live credentials — never commit it (see `mcp/.gitignore`).
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-# mcp/larnitech_mcp/config.py -> mcp/project_keys.json
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "project_keys.json"
+from . import paths
+
+# Beside the package in a checkout; in the user's own directory once
+# installed, where a pip upgrade cannot wipe it. See `paths`.
+CONFIG_PATH = paths.user_file("project_keys.json")
 
 DEFAULT_LOCAL_PORT = 2041
 MODES = ("cloud", "local")

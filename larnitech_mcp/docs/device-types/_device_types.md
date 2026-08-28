@@ -3,7 +3,7 @@ how, never the full detail. Every detail lives in the linked `<type>.md`
 file; this file must stay consistent with them (same keys, same enum
 values, same byte numbers). If they disagree and it's unclear which side is
 current, ask the user rather than guessing — see the sync rule in
-[the README](../README.md).
+[the README](https://github.com/mpopovych-thinkhome/larnitech-mcp#readme).
 
 `Issues` names every bug and quirk of that type by short title only — never
 a description — so an agent scanning this file knows an issue exists and

@@ -1,6 +1,30 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.0.1 Beta — 2026-08-28
+
+Packaging fix — 1.0.0 could only be installed from a clone.
+
+**The wheel shipped no documentation.** Docs sat beside the package at the
+repo root, so `pip install` produced a server whose `get_docs` — the whole
+point of it — returned nothing. They now live inside the package
+(`larnitech_mcp/docs/`) and are declared as package data. Verified by
+installing the built wheel into a clean environment: 33 doc files present,
+all four `get_docs` forms answer.
+
+**User data no longer lands in `site-packages`.** API keys and preferences
+resolved to a path beside the package, which once installed is shared,
+often needs admin rights, and is wiped on upgrade. They now go to
+`~/.larnitech-mcp/` (override with `LARNITECH_MCP_HOME`). A source checkout
+keeps using the files beside it, so existing setups are unchanged.
+
+**`add_docs_note` on an installed copy** would have tried to write into
+`site-packages`. It now copies the file into a per-user overlay on first
+edit and writes there; the overlay wins on read, so notes survive upgrades.
+Only edited files are copied, not the whole set.
+
+New `paths` module holds this resolution in one place.
+
 ## 1.0.0 Beta — 2026-08-28
 
 First public release. MIT licensed.

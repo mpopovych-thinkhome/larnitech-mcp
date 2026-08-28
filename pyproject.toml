@@ -1,6 +1,6 @@
 [project]
 name = "larnitech-mcp"
-version = "1.0.0b0"
+version = "1.0.1b0"
 description = "MCP server for Larnitech smart-home controllers over API2"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,3 +32,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["larnitech_mcp*"]
+
+# The device-type reference is the point of this server, not an extra — a
+# wheel without it installs a `get_docs` that returns nothing.
+[tool.setuptools.package-data]
+larnitech_mcp = ["docs/*.md", "docs/device-types/*.md"]

@@ -1,31 +1,41 @@
 """Device-type reference docs and user preferences, served on demand.
 
-Docs live in `mcp/device-types/` (a junction to the wiki on this machine, a
-plain folder once published). They are fetched per request rather than
-bundled into every tool response: the index gives the type overview, a
-per-type file gives full detail.
+Fetched per request rather than bundled into every tool response: the index
+gives the type overview, a per-type file gives full detail.
 
 Two kinds of durable note can be written back:
-  - a Larnitech/device-type finding -> the type's own wiki file (`add_note`)
-  - a general working preference    -> `mcp/preferences.md` (`add_preference`)
+  - a Larnitech/device-type finding -> that type's own doc (`add_note`)
+  - a general working preference    -> `preferences.md` (`add_preference`)
+
+Where those writes land depends on how the server is installed. From a
+checkout they edit the docs in place, which is the point on a maintainer's
+machine. From an installed wheel the docs live in `site-packages` — shared,
+possibly not writable, and replaced on upgrade — so the first edit copies
+that file into a per-user overlay and edits the copy. The overlay then wins
+on read, so a user's own findings survive upgrades while everyone still
+starts from the shipped set. See `paths`.
 """
 from __future__ import annotations
 
+import shutil
 from datetime import date
 from pathlib import Path
 
-MCP_DIR = Path(__file__).resolve().parent.parent
-DEVICE_TYPES_DIR = MCP_DIR / "device-types"
-INDEX_FILE = DEVICE_TYPES_DIR / "_device_types.md"
-PREFERENCES_FILE = MCP_DIR / "preferences.md"
+from . import paths
+
+DOCS_ROOT = paths.docs_root()
+DEVICE_TYPES_DIR = DOCS_ROOT / "device-types"
+PREFERENCES_FILE = paths.user_file("preferences.md")
 
 # Reachable through the same tool as the device types: every type file links
 # to `BUG-NNN` entries, so the bug registry has to be fetchable too, or those
-# links dead-end for anyone without filesystem access to the wiki.
+# links dead-end for anyone without the docs on disk.
 EXTRA_DOCS = {
-    "bugs": MCP_DIR / "bugs.md",
-    "protocol": MCP_DIR / "api2_protocol.md",
+    "bugs": "bugs.md",
+    "protocol": "api2_protocol.md",
 }
+
+_INDEX_REL = "device-types/_device_types.md"
 
 # Placeholder left in every per-type file's Notes section; new findings go
 # directly under it, so the newest is always first.
@@ -36,14 +46,42 @@ class DocsError(Exception):
     """Missing or unwritable documentation file."""
 
 
-def _type_path(device_type: str) -> Path:
-    return DEVICE_TYPES_DIR / f"{device_type.strip().lower()}.md"
+# --- resolution ----------------------------------------------------------
+
+
+def _resolve(relative: str) -> Path:
+    """The user's edited copy if there is one, else the served copy."""
+    overlay = paths.docs_overlay() / relative
+    return overlay if overlay.exists() else DOCS_ROOT / relative
+
+
+def _writable(relative: str) -> Path:
+    """A path that can be edited, copying into the overlay if it must."""
+    if paths.docs_are_writable():
+        return DOCS_ROOT / relative
+    target = paths.docs_overlay() / relative
+    if not target.exists():
+        source = DOCS_ROOT / relative
+        if not source.exists():
+            raise DocsError(f"missing {source}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    return target
+
+
+def _type_rel(device_type: str) -> str:
+    return f"device-types/{device_type.strip().lower()}.md"
 
 
 def available_types() -> list[str]:
-    if not DEVICE_TYPES_DIR.exists():
-        return []
-    return sorted(p.stem for p in DEVICE_TYPES_DIR.glob("*.md") if not p.stem.startswith("_"))
+    found: set[str] = set()
+    for directory in (DEVICE_TYPES_DIR, paths.docs_overlay() / "device-types"):
+        if directory.is_dir():
+            found |= {p.stem for p in directory.glob("*.md") if not p.stem.startswith("_")}
+    return sorted(found)
+
+
+# --- reading -------------------------------------------------------------
 
 
 def quirks(device_type: str) -> str:
@@ -52,9 +90,10 @@ def quirks(device_type: str) -> str:
     Attached to every write preview so a write can't be reviewed without the
     type's known quirks in front of the reviewer.
     """
-    if not INDEX_FILE.exists():
+    index = _resolve(_INDEX_REL)
+    if not index.exists():
         return ""
-    lines = INDEX_FILE.read_text(encoding="utf-8").splitlines()
+    lines = index.read_text(encoding="utf-8").splitlines()
     try:
         start = lines.index(f"### {device_type.strip().lower()}")
     except ValueError:
@@ -88,11 +127,12 @@ def get(device_type: str | None = None) -> dict:
     """
     key = (device_type or "").strip().lower()
     if device_type is None:
-        path = INDEX_FILE
+        relative = _INDEX_REL
     elif key in EXTRA_DOCS:
-        path = EXTRA_DOCS[key]
+        relative = EXTRA_DOCS[key]
     else:
-        path = _type_path(device_type)
+        relative = _type_rel(device_type)
+    path = _resolve(relative)
 
     result: dict = {
         "device_type": device_type or "index",
@@ -109,18 +149,24 @@ def get(device_type: str | None = None) -> dict:
     return result
 
 
+# --- writing -------------------------------------------------------------
+
+
 def add_note(device_type: str, note: str, index_title: str | None = None) -> dict:
     """Append a finding to a type's Notes section, optionally indexing it.
 
     `index_title` adds a one-line quirk title under that type's Issues block
-    in `_device_types.md`, keeping the index and the detail file in sync.
+    in the index, keeping the index and the detail file in sync.
     """
     note = note.strip()
     if not note:
         raise DocsError("empty note")
-    path = _type_path(device_type)
-    if not path.exists():
-        raise DocsError(f"unknown device type {device_type!r} (have: {', '.join(available_types())})")
+    relative = _type_rel(device_type)
+    if not (DOCS_ROOT / relative).exists() and not (paths.docs_overlay() / relative).exists():
+        raise DocsError(
+            f"unknown device type {device_type!r} (have: {', '.join(available_types())})"
+        )
+    path = _writable(relative)
 
     bullet = f"- ({date.today().isoformat()}) {note}"
     text = path.read_text(encoding="utf-8")
@@ -138,16 +184,18 @@ def add_note(device_type: str, note: str, index_title: str | None = None) -> dic
     else:
         out["index"] = {
             "updated": False,
-            "hint": "pass index_title to also list this quirk in _device_types.md",
+            "hint": "pass index_title to also list this quirk in the index",
         }
     return out
 
 
 def _add_index_quirk(device_type: str, title: str) -> dict:
     """Insert a quirk title under `### <type>` -> `**Issues**` -> `- Quirks`."""
-    if not INDEX_FILE.exists():
-        return {"updated": False, "reason": f"missing {INDEX_FILE}"}
-    lines = INDEX_FILE.read_text(encoding="utf-8").splitlines()
+    try:
+        index = _writable(_INDEX_REL)
+    except DocsError as err:
+        return {"updated": False, "reason": str(err)}
+    lines = index.read_text(encoding="utf-8").splitlines()
 
     try:
         start = lines.index(f"### {device_type}")
@@ -189,8 +237,8 @@ def _add_index_quirk(device_type: str, title: str) -> dict:
         lines.insert(stop + 2, f"- Quirks — details in [{device_type}.md]({device_type}.md)")
         lines.insert(stop + 3, bullet)
 
-    INDEX_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return {"updated": True, "written_to": str(INDEX_FILE), "entry": bullet.strip()}
+    index.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"updated": True, "written_to": str(index), "entry": bullet.strip()}
 
 
 def add_preference(note: str) -> dict:
@@ -203,15 +251,16 @@ def add_preference(note: str) -> dict:
         text = PREFERENCES_FILE.read_text(encoding="utf-8").rstrip()
     else:
         text = _PREFERENCES_HEADER.rstrip()
+    PREFERENCES_FILE.parent.mkdir(parents=True, exist_ok=True)
     PREFERENCES_FILE.write_text(f"{text}\n{bullet}\n", encoding="utf-8")
     return {"written_to": str(PREFERENCES_FILE), "preference": bullet}
 
 
 _PREFERENCES_HEADER = """Standing user preferences for working with Larnitech through this MCP.
 
-Applied **on top of** the device-type wiki: where a preference and the wiki
+Applied **on top of** the device-type docs: where a preference and the docs
 disagree about how to read, write, or present something, the preference
-wins. Facts about the equipment itself belong in the wiki
+wins. Facts about the equipment itself belong in the docs
 (`device-types/<type>.md`), not here — this file is for how the user wants
 the work done.
 
