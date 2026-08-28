@@ -1,6 +1,29 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.0.2 Beta — 2026-08-28
+
+First version actually published to PyPI. 1.0.0 and 1.0.1 were tagged
+before the publishing workflow existed, so neither reached the index.
+
+**Registry metadata.** Added `server.json` for the official MCP registry,
+validated against its schema, and the `mcp-name` marker the registry looks
+for in the published package description to verify PyPI ownership. Both had
+to be in place *before* the first upload, since the check runs against
+what PyPI actually serves.
+
+**Automated publishing.** A GitHub Actions workflow publishes on a version
+tag using PyPI Trusted Publishing — no API token is created or stored. It
+asserts the docs are inside the built wheel before uploading, because
+shipping one without them silently breaks `get_docs` (which is exactly what
+1.0.0 did).
+
+**Stale-docs guard.** The docs served from a maintainer checkout are hard
+links into a knowledge base. An atomic editor save broke one, and a newly
+written bug entry (BUG-006) silently never reached the built package. The
+release build now compares the two and refuses to run on a stale copy
+instead of trusting the link. BUG-006 is restored.
+
 ## 1.0.1 Beta — 2026-08-28
 
 Packaging fix — 1.0.0 could only be installed from a clone.
