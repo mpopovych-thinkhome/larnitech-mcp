@@ -1,0 +1,76 @@
+name: Publish to PyPI
+
+# Runs when a version tag is pushed. Uses PyPI Trusted Publishing: GitHub
+# proves the workflow's identity to PyPI directly, so no API token is
+# created, stored, or able to leak from repository secrets.
+#
+# One-time setup on PyPI, before the first release:
+#   pypi.org -> Your projects -> Publishing -> Add a pending publisher
+#     PyPI project name: larnitech-mcp
+#     Owner:             mpopovych-thinkhome
+#     Repository:        larnitech-mcp
+#     Workflow name:     publish.yml
+#     Environment:       pypi
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+
+      - name: Check that the docs actually shipped
+        # The 1.0.0 wheel installed with zero documentation, which silently
+        # broke get_docs — the server's main feature. Never again quietly.
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          docs = [n for n in names if "/docs/" in n and n.endswith(".md")]
+          print(f"{wheel}: {len(docs)} doc files")
+          missing = [
+              expected for expected in
+              ("larnitech_mcp/docs/bugs.md",
+               "larnitech_mcp/docs/api2_protocol.md",
+               "larnitech_mcp/docs/device-types/_device_types.md")
+              if expected not in names
+          ]
+          if missing or len(docs) < 20:
+              sys.exit(f"docs missing from wheel: {missing or 'too few files'}")
+          PY
+
+      - name: Validate metadata
+        run: |
+          python -m pip install --upgrade twine
+          python -m twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # required for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
