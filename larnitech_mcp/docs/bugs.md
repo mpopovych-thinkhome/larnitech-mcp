@@ -70,3 +70,23 @@ workaround if any, status.
 - **Workaround:** none — cannot distinguish the source of a status change
   via API2 push events.
 - **Status:** open (vendor side)
+
+## BUG-006 — API2 does not expose the LT_Setup `system` widget attribute
+
+- **Found:** 2026-08-27
+- **Affects:** `get-devices` (API2 read), all widget types
+- **Symptom:** LT_Setup's XML config carries a `system` attribute marking a
+  widget as internal/hidden (e.g. group-summary lights, wiring-scaffold
+  channels) rather than a real user-facing control. Confirmed by direct
+  inspection of a full `get-devices` snapshot (Kaunas school object, 1853
+  devices): no device carries a `system` key or any equivalent, regardless
+  of whether the widget is marked `system` in LT_Setup. Larnitech's own app
+  presumably reads this from the XML config directly, not from the runtime
+  API.
+- **Workaround:** none via API2. The nearest available proxy from
+  `get-devices` alone is an empty/placeholder `name` (`"(пусто)"`) combined
+  with `area: "Setup"` — every genuinely unconfigured channel observed so
+  far matches both, but this is a placeholder-detection heuristic, not a
+  real reading of the `system` flag, and will not catch a widget marked
+  `system` that also has a real name/area set.
+- **Status:** open (vendor side)
