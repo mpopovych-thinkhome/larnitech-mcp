@@ -1,5 +1,7 @@
 # Larnitech MCP
 
+<!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
+
 **Version 1.0.1 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
