@@ -1,4 +1,8 @@
 project_keys.json
+preferences.md
+data/
 .venv/
 __pycache__/
 *.egg-info/
+build/
+dist/

@@ -486,7 +486,7 @@ Read-only, same 2-byte shape as other continuous sensors.
 ### co2-sensor
 
 **API**
-- `current-co2`: int ppm, read-only
+- `state`: int ppm, read-only
 
 **XML**
 - `warning-level`/`emergency-level`: default 1500/2000
@@ -496,7 +496,7 @@ Read-only, same 2-byte shape as other continuous sensors.
 - Read: 2 bytes, integer ppm
 
 **Note**
-Read-only, no write path documented.
+Read-only, no write path documented. API status key confirmed live as `state`, not `current-co2`.
 
 **Issues**
 - none recorded

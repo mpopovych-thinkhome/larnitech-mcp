@@ -3,7 +3,7 @@
   "name": "io.github.mpopovych-thinkhome/larnitech-mcp",
   "title": "Larnitech",
   "description": "Read, watch and safely control Larnitech smart-home controllers over the API2 protocol.",
-  "version": "1.0.2-beta",
+  "version": "1.1.0-beta",
   "repository": {
     "url": "https://github.com/mpopovych-thinkhome/larnitech-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "larnitech-mcp",
-      "version": "1.0.2b0",
+      "version": "1.1.0b0",
       "transport": {
         "type": "stdio"
       }

@@ -69,3 +69,8 @@ def user_file(name: str) -> Path:
     if is_checkout():
         return CHECKOUT_DIR / name
     return user_dir() / name
+
+
+def data_dir() -> Path:
+    """Where saved snapshots of controller data live, one folder per object."""
+    return user_file("data")

@@ -19,7 +19,7 @@ from collections import Counter
 
 from mcp.server import MCPServer
 
-from . import config, docs, report, validate, watch
+from . import config, docs, report, snapshots, validate, watch
 from .client import LarnitechError, Session, build_url, request_once
 
 # A write is not settled when the first push arrives: several types make the
@@ -719,6 +719,51 @@ def report_bug(
         device_type=device_type,
         status_sample=status_sample,
     )
+
+
+# --- saved data ----------------------------------------------------------
+
+
+@mcp.tool()
+def save_snapshot(object_name: str, content, comment: str) -> dict:
+    """Keep a slice of controller data on disk, for later.
+
+    Use whenever data is worth more than this conversation: a full device
+    dump before making changes, the state of one area, a watch trace, a
+    reading to compare against next week. The user asking to "save this" or
+    "record the current state" means this tool.
+
+    `content` is whatever you want kept — a string, or an object/list which
+    is stored as JSON. It is written verbatim, so a snapshot can be read
+    back and parsed.
+
+    `comment` is a short slug describing what the slice is
+    ("before-fancoil-swap", "all-climate-zones"). The file is named
+    `<date>_<time>_<comment>.txt` inside a folder for that object.
+    """
+    try:
+        return snapshots.save(object_name, content, comment)
+    except snapshots.SnapshotError as err:
+        return {"saved": False, "error": str(err)}
+
+
+@mcp.tool()
+def list_snapshots(object_name: str | None = None) -> dict:
+    """Snapshots saved for one object, or a summary across all of them.
+
+    Check this before answering "has this changed since last time" — an
+    earlier snapshot is usually the only record of how something looked.
+    """
+    return snapshots.listing(object_name)
+
+
+@mcp.tool()
+def read_snapshot(object_name: str, file: str) -> dict:
+    """Read a saved snapshot back, by the filename `list_snapshots` reports."""
+    try:
+        return snapshots.read(object_name, file)
+    except snapshots.SnapshotError as err:
+        return {"error": str(err)}
 
 
 def main() -> None:

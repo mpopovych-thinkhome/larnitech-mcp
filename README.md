@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
 
-**Version 1.0.2 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.1.0 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -69,6 +69,19 @@ A watch keeps its own connection alive, so it survives the controller's
 | `add_docs_note` | that device type's own doc file |
 | `add_preference` | `preferences.md`, served with every `get_docs` |
 
+**Saving data** — a snapshot is worth more than scrollback.
+
+| Tool | What it does |
+|---|---|
+| `save_snapshot` | keep a slice of controller data as a file |
+| `list_snapshots` | what has been saved, per controller |
+| `read_snapshot` | read one back, to compare against now |
+
+Files land in `data/<controller>/<date>_<time>_<comment>.txt`, written
+verbatim so they can be parsed back. Ask for "save the current state" and
+the agent files it there; ask "has this changed since last week" and it has
+something to compare against.
+
 **Reporting** — `report_bug` turns something you hit into a ready-to-file
 issue for this repository. It composes the report, strips identifiers
 (API keys, serials, hostnames, site names) and returns a prefilled link.
@@ -98,8 +111,9 @@ python -m venv ~/.venvs/larnitech
 ~/.venvs/larnitech/bin/pip install larnitech-mcp     # Windows: Scripts\pip.exe
 ```
 
-Your API keys, preferences, and any device notes the agent records live in
-`~/.larnitech-mcp/`, outside the package, so upgrading never touches them.
+Your API keys, preferences, saved snapshots, and any device notes the agent
+records live in `~/.larnitech-mcp/`, outside the package, so upgrading never
+touches them.
 
 To work on the server itself, install from a clone instead:
 

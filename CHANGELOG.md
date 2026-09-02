@@ -1,6 +1,26 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.1.0 Beta — 2026-09-02
+
+**Saved snapshots.** Three tools — `save_snapshot`, `list_snapshots`,
+`read_snapshot` — keep slices of controller data on disk instead of losing
+them to scrollback. A conversation is a bad place to hold a device dump:
+it scrolls away, and the next session has nothing to diff against.
+
+Files land in `data/<object>/<date>_<time>_<comment>.txt`, one folder per
+controller, newest sorting last. Content is written verbatim — objects as
+JSON, strings as-is, no injected header — so a snapshot can be read back
+and parsed. Object names are slugged for the filesystem, since a real name
+like `test stand` contains characters Windows forbids.
+
+Storage follows the same rule as keys and preferences: beside the package
+in a checkout, `~/.larnitech-mcp/data/` once installed.
+
+**`data/` never ships.** Snapshots hold real device data from real sites,
+so `publish.py` deletes the folder from the built tree and `.gitignore`
+keeps it out of the repository.
+
 ## 1.0.2 Beta — 2026-08-28
 
 First version actually published to PyPI. 1.0.0 and 1.0.1 were tagged

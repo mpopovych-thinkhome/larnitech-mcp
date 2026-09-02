@@ -71,7 +71,7 @@ workaround if any, status.
   via API2 push events.
 - **Status:** open (vendor side)
 
-## BUG-006 — API2 does not expose the LT_Setup `system` widget attribute
+## BUG-006 — API2 does not expose `system` widget attribute
 
 - **Found:** 2026-08-27
 - **Affects:** `get-devices` (API2 read), all widget types

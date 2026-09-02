@@ -20,7 +20,7 @@ Source: https://wiki.larnitech.com/CO2-sensor
 
 ## API
 
-- `current-co2`: integer, ppm (read-only, no write documented)
+- `state`: integer, ppm (read-only, no write documented)
 
 ## Script
 
@@ -33,6 +33,7 @@ Read-only sensor — no write operations documented anywhere.
 <!-- Add live-tested quirks here as found. -->
 
 - (2026-08-18) (2026-08-18) Confirmed live via direct status-set on a virtual co2-sensor (1:219, stand a1b2c3d4): write {"state": 850} was rejected — acknowledged=false, value stayed at its prior reading (0). Confirms the "read-only, no write path documented" assumption: this type cannot be driven from the API2 client side at all, only from a Larnitech-side script (setStatus).
+- (2026-09-02) Confirmed live on 38 co2-sensors, object "school installation": status key is `state`, not `current-co2` as previously documented.
 
 ## Known bugs
 
