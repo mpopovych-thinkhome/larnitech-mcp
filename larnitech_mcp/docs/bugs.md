@@ -1,3 +1,42 @@
+<!--
+MAINTAINER NOTE — read before editing this file.
+
+On the maintainer's machine this file exists at two paths that are the SAME
+file, joined by a hard link:
+
+    wiki/bugs.md      <- edit here, this is the knowledge base
+    mcp/bugs.md       <- the MCP server serves the docs from here
+
+Editing either one edits both, because there is only one file. But any tool
+that saves by writing a temp file and renaming over the original BREAKS the
+link: the wiki keeps your new text, the MCP copy silently keeps the old one,
+and the next published release ships stale docs. This has already happened
+three times — twice losing a freshly written BUG entry, and once while
+writing this very note, because an agent's own file-editing tool does the
+same atomic save. Assume the link is broken after every edit and check.
+
+After editing, check that both paths still point at one file — the link
+count must be 2, not 1:
+
+    ls -la wiki/bugs.md mcp/bugs.md      (second column is the link count)
+
+If it reads 1, the link broke. Restore it from the wiki copy, which is
+always the authoritative one:
+
+    rm mcp/bugs.md
+    cmd /c mklink /H mcp\bugs.md ..\wiki\bugs.md
+
+The release build (`mcp/tools/publish.py`) refuses to run when the two
+diverge, so a broken link cannot reach a release — but between releases the
+MCP would serve the stale copy, so fix it when you notice.
+
+The same applies to `api2_protocol.md`. `device-types/` is a directory
+junction and does not have this problem.
+
+This note is an HTML comment: invisible in rendered Markdown, visible to an
+agent reading the file as text.
+-->
+
 # Larnitech System Bugs
 
 Numbered registry of confirmed vendor/system bugs found via live testing.
@@ -89,4 +128,56 @@ workaround if any, status.
   far matches both, but this is a placeholder-detection heuristic, not a
   real reading of the `system` flag, and will not catch a widget marked
   `system` that also has a real name/area set.
+- **Status:** open (vendor side)
+
+## BUG-007 — `light-scheme` (ls-type 0/3): no status-change event when a slave changes state, only on a direct widget press
+
+- **Found:** 2026-08-28 (live watch, test stand, addr `1:211`, `ls-type=3`)
+- **Affects:** [light-scheme](device-types/light-scheme.md), ls-type 0 and 3
+- **Symptom:** events about a status change do not arrive if the status
+  changes because of a slave device, only when the widget itself is
+  pressed directly. Confirmed live: 3 manual toggles of the widget each
+  produced a `statuses` push event (`off→on`, `on→off`, `off→on`); a 4th
+  change — a slave device's state changed directly, bypassing the scheme
+  widget — produced no push event at all, and a follow-up `status-get`
+  still returned the stale `state: "on"`.
+- **Workaround:** none via API2 — no way to read the true combined state of
+  the slaves through this widget. Don't treat `light-scheme` `status.state`
+  as live telemetry for ls-type 0/3; it only reflects "was this scheme last
+  triggered on or off," not "are the slaves currently in that state."
+- **Status:** open (protocol limitation, not fixable client-side)
+
+## BUG-008 — WebSocket: no pong on ping, and session close sends no close frame
+
+- **Found:** undated (documented in [api2_protocol.md](api2_protocol.md#common-quirks-all-commands) quirks list, not previously tracked as a numbered bug)
+- **Affects:** WebSocket session (cloud), all commands/types — protocol-level, not device-specific
+- **Symptom:** two related keepalive issues:
+  1. The cloud never answers a WS ping — a client with `ping_interval` set
+     drops the connection on `keepalive ping timeout` (no pong ever
+     arrives).
+  2. After ~5 minutes idle (no packets sent), the server closes the session
+     **without sending a close frame** (`no close frame received or sent`).
+- **Workaround:** disable client-side pings (`ping_interval=None`); keep the
+  session alive with periodic real requests (e.g. `get-devices`) instead of
+  ping/pong — any request resets the idle timer. Keep the client
+  `close_timeout` small so the missing close frame doesn't hang the client
+  on disconnect.
+- **Status:** open (vendor side)
+
+## BUG-009 — `speaker`: an invalid `state` write drives the widget into `error`
+
+- **Found:** 2026-09-02 (live, demo case, addr `5:30`)
+- **Affects:** [speaker](device-types/speaker.md)
+- **Symptom:** writing an unrecognised value to `status.state` is not
+  rejected as a bad parameter. The `status-set` returns without a success
+  ack, and the widget then reports `state: "error"` and stays there.
+  Confirmed with `state: "start"` (a plausible-looking synonym for the
+  accepted `play`): the response carried no `success`, and a follow-up
+  `status-get` returned `{"state": "error"}`.
+- **Contrast:** `AC`/`conditioner` reject a bad `fan` value cleanly with
+  `{"code":9,"description":"set-status has invalid parameter"}` and keep
+  working. This type breaks instead.
+- **Workaround:** write only the confirmed vocabulary — `play`, `playing`,
+  `pause`, `stop`, `next`, `previous`. Recovery from `error` is a plain
+  `play`, which restores normal playback.
 - **Status:** open (vendor side)

@@ -23,6 +23,10 @@ Source: https://wiki.larnitech.com/Dimmer-lamp
   range, and not a 0.0-1.0 fraction. Confirmed live 2026-08-14.
 - `color-temp`: integer percent, same 0-100 scale as `level`
 
+## Motion automations
+
+Carries the same `<automation>` motion rules as `lamp` — `on-by-moving`, `off-by-moving`, `off-by-door`, invisible through API2 apart from the `auto-state` flag. Documented once in [lamp.md](lamp.md#motion-automations-automation).
+
 ## Script
 
 Status bytes (2 bytes read-back):

@@ -26,6 +26,10 @@ the live page when convenient).
   until scaled: multiply by 3.6 to get degrees on read, divide by 3.6 on
   write.
 
+## Motion automations
+
+Carries the same `<automation>` motion rules as `lamp` — `on-by-moving`, `off-by-moving`, `off-by-door`, invisible through API2 apart from the `auto-state` flag. Documented once in [lamp.md](lamp.md#motion-automations-automation).
+
 ## Script
 
 Device status (4 bytes), VSH color system:

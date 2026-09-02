@@ -1,6 +1,49 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.2.1 Beta — 2026-09-02
+
+Documentation only — no code changes. Four device types added and two open
+questions closed, all from live testing against a controller that carries
+types the earlier objects did not.
+
+**`speaker`** — media point. Transport commands all confirmed working, but
+the write vocabulary is not the read vocabulary *and differs per command*:
+`play` reads back `playing`, `stop` reads `stopped`, `pause` reads `pause`.
+Three rules in one type; the table is in the docs because inferring it is
+hopeless. `next`/`previous` switch **source**, not track — confirmed by the
+`url` changing between radio streams. `volume` is a 0-100 percent over an
+underlying 0-250 scale, so a written value snaps to the nearest 0.4% step:
+writing `5` reads back `5.2`, which makes an exact-match write verify
+report a good write as failed. `position` is a seconds-with-milliseconds
+string, not the raw milliseconds the script API uses.
+
+**`percent-sensor`, `float-sensor`, `current-sensor`** — generic scalar
+readouts, used on the observed controller for self-telemetry. The type name
+describes display formatting; an XML-only `hw` attribute says what the
+value actually is. `percent-sensor` returned 768 and 256 on an idle CPU, so
+**the value is not a percent as it arrives** — every sample was a multiple
+of 256, which fits a raw two-byte encoding, recorded as the leading
+hypothesis rather than as fact. `current-sensor` is amperes; its encoding
+is unconfirmed because the one observed device reads zero.
+
+**Motion automations documented.** `lamp`, `dimmer-lamp`, `rgb-lamp` and
+`light-scheme` can carry `<automation>` rules — `on-by-moving`,
+`off-by-moving`, `off-by-door` — with separate on and off thresholds for
+hysteresis. None of it is visible through API2: the only trace is the
+boolean `auto-state`, so the API cannot explain why a light changed by
+itself. Written once in `lamp.md`, referenced from the other three.
+
+**`motion-sensor` conflict resolved.** The docs carried an unresolved
+disagreement over whether `state` is a boolean. It is not — live readings
+of `39.65` and `0.0` settle it as a continuous level compared against a
+threshold, which is exactly how the controller's own automations use it.
+
+**[BUG-009](https://github.com/mpopovych-thinkhome/larnitech-mcp/blob/main/larnitech_mcp/docs/bugs.md)** — an invalid `state`
+write to a `speaker` is not rejected; it drives the widget into `error` and
+leaves it there. `AC` rejects a bad value cleanly, so this is specific to
+the type. Recovery is a plain `play`.
+
 ## 1.2.0 Beta — 2026-09-02
 
 **Snapshots are a JSON envelope now.** 1.1.0 wrote whatever it was handed,

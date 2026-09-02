@@ -27,12 +27,12 @@ can decide whether to open the type file.
 | [vent](vent.md#vent)                                              | Standalone type, not to be confused with `ventilation`     | quirk    |
 | [virtual](virtual.md#virtual)                                     | Catch-all — behavior fully depends on `sub-type`           | quirk    |
 | [json](json.md#json)                                              | JSON-status device, behavior fully depends on `sub-type`    | quirk    |
-| [light-scheme](light-scheme.md#light-scheme)                      | Scene widget, `ls-type` undocumented upstream              | —        |
+| [light-scheme](light-scheme.md#light-scheme)                      | Scene widget, `ls-type` undocumented upstream              | quirk    |
 | [temperature-sensor](temperature-sensor.md#temperature-sensor)    | °C sensor                                                  | —        |
 | [humidity-sensor](humidity-sensor.md#humidity-sensor)             | % sensor, read-only                                        | —        |
 | [co2-sensor](co2-sensor.md#co2-sensor)                            | ppm sensor, read-only                                      | —        |
 | [illumination-sensor](illumination-sensor.md#illumination-sensor) | Light-level sensor, read-only                              | —        |
-| [motion-sensor](motion-sensor.md#motion-sensor)                   | Vendor page looks like a generic sensor template           | conflict |
+| [motion-sensor](motion-sensor.md#motion-sensor)                   | Continuous motion level, not a boolean                     | —        |
 | [door-sensor](door-sensor.md#door-sensor)                         | Generic contact widget, `sub-type` sets real semantics      | quirk    |
 | [leak-sensor](leak-sensor.md#leak-sensor)                         | Leak detector, can report a fault via `malfunction`         | quirk    |
 | [ir-transmitter](ir-transmitter.md#ir-transmitter)                | IR blaster, vendor page is a stub                          | —        |
@@ -42,6 +42,10 @@ can decide whether to open the type file.
 | [com-port](com-port.md#com-port)                                  | RS232/serial port reference, no status                     | —        |
 | [gate](gate.md#gate)                                              | Gate/door, digest oversimplifies to on/off                 | conflict |
 | [jalousie](jalousie.md#jalousie)                                  | Motorized blind/shutter, same open/close model as `gate`   | quirk    |
+| [speaker](speaker.md#speaker)                                     | Media point — streams, volume, transport commands          | 1 bug    |
+| [percent-sensor](percent-sensor.md#percent-sensor)                | Generic scalar readout, value is NOT a percent as-is       | quirk    |
+| [float-sensor](float-sensor.md#float-sensor)                      | Generic scalar readout, scale not established              | quirk    |
+| [current-sensor](current-sensor.md#current-sensor)                | Electrical current in amperes, encoding unconfirmed        | —        |
 | [blinds](blinds.md#blinds)                                        | Position/target device, 0=open/100=closed — distinct from `jalousie`/`gate` | quirk |
 
 ---
@@ -438,7 +442,8 @@ Broadest catch-all type — always check `sub-type` before assuming behavior. `v
 `ls-type` meanings (0=impulse, 1=impulse+feedback, 2=activation-only, 3=impulse+separate on/off status, 4=master-slave passthrough) come entirely from live testing — vendor page doesn't document them.
 
 **Issues**
-- none recorded
+- Quirks — details in [light-scheme.md](light-scheme.md)
+  - no status-change event when a slave changes state, only on a direct widget press, ls-type 0/3 (BUG-007)
 
 ---
 
@@ -539,7 +544,7 @@ Vendor page uses the generic continuous-sensor template; no discrete "motion det
 
 **Issues**
 - Quirks — details in [motion-sensor.md](motion-sensor.md)
-  - digest assumes boolean `state`, vendor page describes continuous encoding, unresolved
+  - resolved: `state` is a continuous level, not a boolean — confirmed live
 
 ---
 
@@ -745,3 +750,103 @@ Distinct control model from `jalousie`/`gate` — those are state-only, verb-for
 **Issues**
 - Quirks — details in [blinds.md](blinds.md)
   - 0=open/100=closed convention is inverted from typical expectation — confirmed live
+
+---
+
+### speaker
+
+**API**
+- `state`: write vocabulary differs from read, and differs per command
+  - `play` -> reads `playing`
+  - `pause` -> reads `pause` (not `paused`)
+  - `stop` -> reads `stopped`
+  - `next` / `previous` -> switch source, read `playing`
+- `url`: current stream/file — the only indication of what is playing, no track metadata
+- `volume`: float percent 0-100, snaps to 1/250 steps (0.4%)
+- `position`: string, seconds with milliseconds, e.g. `"39.784"`
+- `priority`: int, 0-250
+- device-level `linked`: button bindings, one of the few config-time attributes that IS exposed
+
+**XML**
+- `hw`: space-separated options, seen `play-lim=0 ss=0` (not exposed via API)
+- `<linked addr=... click=... long-click=...>`: physical button bindings
+
+**Script**
+- Status byte array: 0 state (0 off, 1 playing, 2 error, 4 pause), 1 volume 0-250, 4 priority, 5 duration ms, 9 position ms, 17 url
+- Commands: `setStatus(addr, 0)` stop, `2` pause, `3` continue, `{4,vol}`, `{8,"url"}`, or the string form `{"v=120 s=1 url=..."}`
+
+**Note**
+API2 and script views disagree on nearly every representation — string vs numeric state, percent vs 0-250, seconds string vs milliseconds int.
+
+**Issues**
+- Bugs
+  - invalid `state` write puts the widget in `error` — [BUG-009](../bugs.md#bug-009)
+- Quirks — details in [speaker.md](speaker.md)
+  - write vocabulary is per-command, three different rules
+  - volume snaps to 0.4% steps, so an exact-match verify reports a good write as failed
+  - `next`/`previous` change the source, not the track
+
+---
+
+### percent-sensor
+
+**API**
+- `state`: number — **not a percent as-is**, observed 768, 256, 0 on an idle CPU
+- Read-only
+
+**XML**
+- `hw`: names the metric, seen `cpu-usage` (not exposed via API)
+- `system="yes"` on the observed device (not exposed — [BUG-006](../bugs.md#bug-006))
+
+**Script**
+- not documented
+
+**Note**
+Generic scalar readout used here for controller self-telemetry; the type describes display formatting, `hw` says what the value is.
+
+**Issues**
+- Quirks — details in [percent-sensor.md](percent-sensor.md)
+  - value exceeds 100 and needs scaling; ÷256 fits the samples but is unconfirmed
+
+---
+
+### float-sensor
+
+**API**
+- `state`: number, observed 17/23/20/35 and moving — live telemetry
+- Read-only
+
+**XML**
+- `hw`: names the metric, seen `cpu-load` (not exposed via API)
+- `system="yes"` on the observed device
+
+**Script**
+- not documented
+
+**Note**
+Same family as `percent-sensor`; every observed value was an integer despite the type name.
+
+**Issues**
+- Quirks — details in [float-sensor.md](float-sensor.md)
+  - scale not established, and different from `percent-sensor` (values are not multiples of 256)
+
+---
+
+### current-sensor
+
+**API**
+- `state`: electrical current in **amperes**; only ever observed as `0`, so encoding unconfirmed
+- Read-only
+
+**XML**
+- no `hw` — the type names the quantity
+- `system="yes"` on the observed device
+
+**Script**
+- not documented
+
+**Note**
+Same family as `percent-sensor`/`float-sensor`, but names its quantity in the type rather than in `hw`.
+
+**Issues**
+- none recorded

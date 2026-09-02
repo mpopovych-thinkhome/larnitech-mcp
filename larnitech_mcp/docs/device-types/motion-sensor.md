@@ -15,9 +15,16 @@ Source: https://wiki.larnitech.com/Motion-sensor
 
 ## API
 
-- `state`: documented as the key status field, but see the mismatch below.
+- `state`: **a continuous number, not a boolean.** Confirmed live on `3:30`
+  (demo case): read `39.65` on one poll and `0.0` on later polls. The
+  vendor page was right and the earlier digest — which called this a
+  boolean — was wrong.
 
-⚠️ **Unresolved conflict** — see Notes.
+Read as a motion *level* against a threshold, not as "detected / not
+detected". This is exactly how the controller's own automations use it:
+an `<automation>` rule carries a `motion-level` threshold, with a higher
+value for switching on than for switching off — see
+[lamp](lamp.md#motion-automations-automation).
 
 ## Script
 
@@ -26,14 +33,13 @@ integral — a **continuous-range encoding**, no enumerated on/off values.
 
 ## Notes
 
-**Mismatch, not yet resolved:** a motion sensor is conceptually a
-boolean/triggered device (motion detected / not detected), but the vendor
-page documents this type with the same continuous fractional/integral
-2-byte encoding used for temperature/humidity/illumination sensors, and
-gives no discrete "motion detected" value. Either the vendor page is a
-generic sensor template misapplied here, or `state` decodes to something
-non-boolean via API2 (e.g. a numeric level). Verify against a live device
-before assuming `state` is a simple on/off boolean.
+**Resolved 2026-09-02.** The conflict was between a digest that assumed a
+boolean and a vendor page documenting a continuous 2-byte encoding. Live
+readings settle it in the vendor page's favour: `39.65`, then `0.0`. There
+is no discrete "motion detected" value — the caller picks a threshold.
+
+The scale is not established: `39.65` was the highest value seen, and
+nothing is known about its ceiling or units.
 
 <!-- Add live-tested quirks here as found. -->
 

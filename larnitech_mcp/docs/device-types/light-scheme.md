@@ -54,6 +54,10 @@ all** (neither `get-devices` nor events) — only present in the XML config.
 - `4` (master-slave) — not a scene at all: behaves like a normal widget of
   its own type (lamp/dimmer/RGB), just mirrors its status to slaves
 
+## Motion automations
+
+Carries the same `<automation>` motion rules as `lamp` — `on-by-moving`, `off-by-moving`, `off-by-door`, invisible through API2 apart from the `auto-state` flag. Documented once in [lamp.md](lamp.md#motion-automations-automation).
+
 ## Script
 
 Not documented at byte level — `light-scheme` state propagation is
@@ -67,6 +71,8 @@ wiki does — `ls-type` behavior is entirely undocumented upstream.
 
 <!-- Add live-tested quirks here as found. -->
 
+- (2026-09-02) Confirmed live 2026-08-28 via watch on `1:211` (`ls-type=3`, test stand): events about a status change do not arrive if the status changes because of a slave device, only when the widget itself is pressed directly. 3 manual toggles of the widget each fired a `statuses` push event; a 4th change, made by altering a slave device's state directly (bypassing the scheme), produced no push event at all, and a follow-up `status-get` still returned the stale prior value. So for ls-type 0/3, `status.state` is not real feedback from the slaves — it only reflects the last activation/deactivation command sent to this widget, and silently diverges from the true combined slave state whenever a slave changes through any other path. See [BUG-007](../bugs.md#bug-007).
+
 ## Known bugs
 
-None recorded yet.
+- [BUG-007](../bugs.md#bug-007) — no status-change event when a slave changes state, only on a direct widget press (ls-type 0/3)
