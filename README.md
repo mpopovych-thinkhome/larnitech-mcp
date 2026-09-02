@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
 
-**Version 1.1.0 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.2.0 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -77,10 +77,16 @@ A watch keeps its own connection alive, so it survives the controller's
 | `list_snapshots` | what has been saved, per controller |
 | `read_snapshot` | read one back, to compare against now |
 
-Files land in `data/<controller>/<date>_<time>_<comment>.txt`, written
-verbatim so they can be parsed back. Ask for "save the current state" and
-the agent files it there; ask "has this changed since last week" and it has
-something to compare against.
+Files land in `data/<controller>/<date>_<time>_<comment>.txt`, one folder
+per controller. Each is a JSON envelope — `object`, `saved_at`, `comment`
+and the payload under `data` — so provenance travels with the file and
+`read_snapshot` hands back parsed structure rather than text to re-parse.
+Numbers stay numbers and `null` stays null, which matters here: telling
+"no data" apart from zero is the difference between a quiet meter and a
+reading of nothing.
+
+Ask for "save the current state" and the agent files it there; ask "has
+this changed since last week" and it has something to compare against.
 
 **Reporting** — `report_bug` turns something you hit into a ready-to-file
 issue for this repository. It composes the report, strips identifiers

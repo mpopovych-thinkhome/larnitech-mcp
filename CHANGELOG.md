@@ -1,6 +1,37 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.2.0 Beta — 2026-09-02
+
+**Snapshots are a JSON envelope now.** 1.1.0 wrote whatever it was handed,
+which meant the format depended on whoever saved it — one folder already
+held a CSV table written by a different session. Reading one back therefore
+meant sniffing the format and guessing at column types.
+
+Every snapshot is now:
+
+```json
+{"object": ..., "saved_at": ..., "comment": ..., "data": <payload>}
+```
+
+Provenance travels with the file rather than living only in the folder and
+filename, and `read_snapshot` returns the payload already parsed under
+`data` — no parsing step, no guessing. Types survive the round trip: a
+reading saved as `22.38` comes back a float, and `null` stays null instead
+of becoming the string "null". That distinction is load-bearing here, since
+an all-`null` payload means "the device did not answer", not zero.
+
+JSON costs roughly 2-3x the bytes of an equivalent CSV table. Paid
+deliberately, for the type fidelity and the fixed shape.
+
+Files written before this, or by hand, still read back: `format` reports
+`raw` or `json` instead of `envelope`, and says they carry no provenance.
+
+**Better miss on an unknown folder.** A snapshot filed under a folder name
+that isn't derived from the object name used to fail with an unhelpful
+empty list. The error now names the folders that do exist and says they can
+be passed directly.
+
 ## 1.1.0 Beta — 2026-09-02
 
 **Saved snapshots.** Three tools — `save_snapshot`, `list_snapshots`,

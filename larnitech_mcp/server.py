@@ -733,9 +733,11 @@ def save_snapshot(object_name: str, content, comment: str) -> dict:
     reading to compare against next week. The user asking to "save this" or
     "record the current state" means this tool.
 
-    `content` is whatever you want kept — a string, or an object/list which
-    is stored as JSON. It is written verbatim, so a snapshot can be read
-    back and parsed.
+    `content` is whatever you want kept. Pass **structured data** — a list
+    of readings, a dict of statuses — rather than pre-formatted text: it is
+    stored as JSON, so numbers stay numbers and `null` stays null when it is
+    read back, and a later session can compare two snapshots directly.
+    Formatting it as a table or CSV first throws that away.
 
     `comment` is a short slug describing what the slice is
     ("before-fancoil-swap", "all-climate-zones"). The file is named
@@ -759,7 +761,13 @@ def list_snapshots(object_name: str | None = None) -> dict:
 
 @mcp.tool()
 def read_snapshot(object_name: str, file: str) -> dict:
-    """Read a saved snapshot back, by the filename `list_snapshots` reports."""
+    """Read a saved snapshot back, by the filename `list_snapshots` reports.
+
+    Returns the payload already parsed under `data`, plus when it was saved
+    and the comment it was saved under. `format` says what was found:
+    `envelope` for a normal snapshot, `json` or `raw` for a file written by
+    hand or before the format was fixed — those carry no provenance.
+    """
     try:
         return snapshots.read(object_name, file)
     except snapshots.SnapshotError as err:
