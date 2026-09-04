@@ -1,4 +1,4 @@
-"""CLI: store keys without going through the chat, and check a connection.
+r"""CLI: store keys without going through the chat, and check a connection.
 
     python -m larnitech_mcp serve                  run the MCP server (stdio)
     python -m larnitech_mcp auth "Test stand"    store an API key (hidden input)
@@ -6,6 +6,7 @@
     python -m larnitech_mcp list
     python -m larnitech_mcp test "Test stand"
     python -m larnitech_mcp allow-write "Test stand" on
+    python -m larnitech_mcp data-dir "Test stand" "D:\Projects\Office\Backups"
 """
 from __future__ import annotations
 
@@ -48,6 +49,8 @@ def _cmd_list(args) -> int:
         key = "key ok" if config.has_key(name) else "NO KEY"
         write = "write allowed" if obj.get("allow_write") else "read-only"
         print(f"  {name}: {build_url(obj)}  [{key}, {write}]")
+        if obj.get("data_dir"):
+            print(f"      snapshots -> {obj['data_dir']}")
     return 0
 
 
@@ -90,6 +93,14 @@ def _cmd_devices(args) -> int:
             area = d.get("area", "")
             status = d.get("status", "")
             print(f"{addr:12} {dtype:20} {name:28} {area:16} {status}")
+    return 0
+
+
+def _cmd_data_dir(args) -> int:
+    """Point an object's snapshots at its own project folder, or clear it."""
+    record = config.set_data_dir(args.name, None if args.clear else args.path)
+    where = record.get("data_dir") or "(default: the MCP data folder)"
+    print(f"{args.name}: snapshots -> {where}")
     return 0
 
 
@@ -142,6 +153,12 @@ def main() -> int:
     p.add_argument("name")
     p.add_argument("--full", action="store_true", help="print every device, not just the type breakdown")
     p.set_defaults(fn=_cmd_devices)
+
+    p = sub.add_parser("data-dir", help="store an object's snapshots in a folder of its own")
+    p.add_argument("name")
+    p.add_argument("path", nargs="?", help="folder to keep this object's snapshots in")
+    p.add_argument("--clear", action="store_true", help="revert to the default data folder")
+    p.set_defaults(fn=_cmd_data_dir)
 
     p = sub.add_parser("allow-write", help="allow or forbid writes for an object")
     p.add_argument("name")

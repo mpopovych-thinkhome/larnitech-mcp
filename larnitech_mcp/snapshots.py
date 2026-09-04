@@ -37,7 +37,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from . import paths
+from . import config, paths
 
 STAMP_FORMAT = "%Y-%m-%d_%H-%M-%S"
 ENVELOPE_KEYS = {"object", "saved_at", "comment", "data"}
@@ -61,6 +61,23 @@ def slug(text: str) -> str:
 
 
 def object_dir(object_name: str) -> Path:
+    """Where this object's snapshots live.
+
+    An object can point its snapshots at a folder of its own — typically the
+    project directory already holding that installation's drawings, configs
+    and controller backups, so a state capture sits with the rest of its
+    artefacts rather than in a separate store. Set it with
+    `larnitech-mcp data-dir "<name>" "<path>"`.
+
+    Without that, snapshots go under the MCP's own data folder, in a
+    subfolder named after the object.
+    """
+    try:
+        custom = config.get_object(object_name).get("data_dir")
+    except config.ConfigError:
+        custom = None  # not a configured object — a bare folder name is fine
+    if custom:
+        return Path(custom).expanduser()
     return paths.data_dir() / slug(object_name)
 
 
@@ -105,28 +122,45 @@ def _describe(path: Path) -> dict:
 def listing(object_name: str | None = None) -> dict:
     """Snapshots for one object, or a per-object count across all of them."""
     root = paths.data_dir()
-    if not root.is_dir():
-        return {"root": str(root), "objects": {}, "total": 0}
 
     if object_name:
         directory = object_dir(object_name)
         files = sorted(directory.glob("*.txt")) if directory.is_dir() else []
         return {
-            "root": str(root),
             "object": object_name,
+            "directory": str(directory),
             "snapshots": [_describe(p) for p in files],
             "total": len(files),
         }
 
+    # Two places to look: the shared root, and any object pointed elsewhere.
+    seen: dict[Path, str] = {}
+    if root.is_dir():
+        for directory in sorted(p for p in root.iterdir() if p.is_dir()):
+            seen[directory] = directory.name
+    try:
+        configured = config.load_objects()
+    except config.ConfigError:
+        configured = {}
+    for name, obj in configured.items():
+        if obj.get("data_dir"):
+            seen[Path(obj["data_dir"]).expanduser()] = name
+
     objects = {}
     total = 0
-    for directory in sorted(p for p in root.iterdir() if p.is_dir()):
+    for directory, label in seen.items():
+        if not directory.is_dir():
+            continue
         files = sorted(directory.glob("*.txt"))
         if not files:
             continue
-        objects[directory.name] = {"count": len(files), "newest": files[-1].name}
+        objects[label] = {
+            "count": len(files),
+            "newest": files[-1].name,
+            "directory": str(directory),
+        }
         total += len(files)
-    return {"root": str(root), "objects": objects, "total": total}
+    return {"default_root": str(root), "objects": objects, "total": total}
 
 
 def read(object_name: str, file: str) -> dict:
@@ -142,12 +176,10 @@ def read(object_name: str, file: str) -> dict:
         # The folder is derived from the object name, so a folder created
         # under a different naming convention won't be found this way. Name
         # the folders that do exist — they can be passed here directly.
-        root = paths.data_dir()
-        folders = sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
         raise SnapshotError(
-            f"nothing saved for {object_name!r} (looked in {directory.name!r}). "
-            f"Folders that exist: {folders} — pass one of those as `object_name` "
-            f"if the snapshot was filed under a different name."
+            f"nothing saved for {object_name!r} (looked in {str(directory)!r}). "
+            f"Use list_snapshots() to see which objects and folders actually "
+            f"hold snapshots — an object can be pointed at a folder of its own."
         )
 
     text = target.read_text(encoding="utf-8")

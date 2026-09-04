@@ -51,4 +51,4 @@ more here.
 
 ## Known bugs
 
-None recorded yet.
+- Automation-preset switch leaves the previous preset's outputs on — [BUG-010](../bugs.md#bug-010)

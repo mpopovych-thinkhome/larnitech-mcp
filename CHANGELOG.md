@@ -1,7 +1,32 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
-## 1.2.1 Beta — 2026-09-02
+## 1.3.0 Beta — 2026-09-04
+
+**Snapshots can live with the rest of an installation's files.** An object
+can now be pointed at a folder of its own:
+
+```bash
+larnitech-mcp data-dir "Home" "/projects/home/backups"
+```
+
+Set it, and `save_snapshot`, `list_snapshots` and `read_snapshot` all use
+that folder for that object instead of the MCP's own `data/` directory.
+Cleared with `--clear`, and objects without it behave exactly as before.
+
+The reason is that a site usually already has a project directory holding
+its drawings, configs and controller factory backups. A state capture
+belongs there, next to them and inside whatever backs that folder up —
+not in a separate store keyed by object name, which is one more thing to
+remember and to back up.
+
+`list_snapshots()` with no argument now reports both kinds together, each
+with the directory it came from, so nothing goes missing when only some
+objects are redirected. Per-object listings report their `directory` too.
+
+Note for anyone redirecting an existing object: snapshots already saved
+stay where they were. Move them into the new folder if you want the
+history to follow.
 
 Documentation only — no code changes. Four device types added and two open
 questions closed, all from live testing against a controller that carries

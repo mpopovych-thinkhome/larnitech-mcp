@@ -181,3 +181,23 @@ workaround if any, status.
   `pause`, `stop`, `next`, `previous`. Recovery from `error` is a plain
   `play`, which restores normal playback.
 - **Status:** open (vendor side)
+
+## BUG-010 — climate-control/valve-heating/fancoil: switching the whole-house automation preset does not turn off outputs left on by the previous preset
+
+- **Found:** 2026-09-04 (reported by user, another installation)
+- **Affects:** [climate-control](device-types/climate-control.md),
+  [valve-heating](device-types/valve-heating.md),
+  [fancoil](device-types/fancoil.md)
+- **Symptom:** when a script switches the whole-house automation preset
+  (e.g. `Winter` → `Summer`), any zone/device that was `on` under the old
+  preset stays `on` — the controller does not clear it. The new preset then
+  activates its own devices (e.g. cooling fancoils/valves under `Summer`)
+  on top of that, without first turning off what the old preset left
+  running. Net effect: heating and cooling outputs end up `on`
+  simultaneously in the same zone (e.g. floor heating from `Winter` still
+  running while a fancoil switches to `cool` under `Summer`).
+- **Workaround:** in the script that performs the whole-house
+  automation switch, add a function called with a **~20s delay** after
+  the switch that explicitly turns off every device that was on under the
+  *previous* preset — do not rely on the new preset to supersede it.
+- **Status:** open (vendor side)

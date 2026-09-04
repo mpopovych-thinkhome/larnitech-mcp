@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
 
-**Version 1.2.1 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.3.0 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -78,7 +78,18 @@ A watch keeps its own connection alive, so it survives the controller's
 | `read_snapshot` | read one back, to compare against now |
 
 Files land in `data/<controller>/<date>_<time>_<comment>.txt`, one folder
-per controller. Each is a JSON envelope — `object`, `saved_at`, `comment`
+per controller — or in a folder of your own, if that installation already
+has a project directory holding its drawings, configs and controller
+backups:
+
+```bash
+python -m larnitech_mcp data-dir "Home" "/projects/home/backups"
+```
+
+Snapshots then sit with the rest of that site's files instead of in a
+separate store. `list_snapshots` finds both kinds.
+
+Each is a JSON envelope — `object`, `saved_at`, `comment`
 and the payload under `data` — so provenance travels with the file and
 `read_snapshot` hands back parsed structure rather than text to re-parse.
 Numbers stay numbers and `null` stays null, which matters here: telling

@@ -15,14 +15,14 @@ can decide whether to open the type file.
 | ----------------------------------------------------------------- | ---------------------------------------------------------- | -------- |
 | [ac](ac.md#ac)                                                    | Universal climate widget, most complex in the system       | 3 bugs   |
 | [conditioner](conditioner.md#conditioner)                         | Distinct from `AC`, shares the mask-attribute bugs         | 2 bugs   |
-| [climate-control](climate-control.md#climate-control)             | Generic HVAC/climate zone, no vendor page found            | quirk    |
+| [climate-control](climate-control.md#climate-control)             | Generic HVAC/climate zone, no vendor page found            | 1 bug    |
 | [dimmer-lamp](dimmer-lamp.md#dimmer-lamp)                         | Dimmable light                                             | —        |
 | [rgb-lamp](rgb-lamp.md#rgb-lamp)                                  | RGB light, VSH color model                                 | —        |
 | [lamp](lamp.md#lamp)                                              | Generic on/off indicator, sub-type changes semantics       | —        |
 | [switch](switch.md#switch)                                        | Physical wall-panel button/key input, not a relay — resolved | —      |
 | [valve](valve.md#valve)                                           | Water valve                                                | conflict |
-| [valve-heating](valve-heating.md#valve-heating)                   | Heating valve with automation presets                      | quirk    |
-| [fancoil](fancoil.md#fancoil)                                     | Fancoil, shares automation model with valve-heating        | quirk    |
+| [valve-heating](valve-heating.md#valve-heating)                   | Heating valve with automation presets                      | 1 bug    |
+| [fancoil](fancoil.md#fancoil)                                     | Fancoil, shares automation model with valve-heating        | 1 bug    |
 | [ventilation](ventilation.md#ventilation)                         | `virtual/ventilation` — Komfovent-class units              | quirk    |
 | [vent](vent.md#vent)                                              | Standalone type, not to be confused with `ventilation`     | quirk    |
 | [virtual](virtual.md#virtual)                                     | Catch-all — behavior fully depends on `sub-type`           | quirk    |
@@ -152,6 +152,8 @@ Distinct API2 type from `ac`, shares XML shape and masking bugs.
 Generic HVAC/climate zone type; relationship to `valve-heating`/`fancoil` unclear.
 
 **Issues**
+- Bugs
+  - automation-preset switch leaves previous preset's outputs on — [BUG-010](../bugs.md#bug-010)
 - Quirks — details in [climate-control.md](climate-control.md)
   - mode is optional and gated by the active automation's capability, not standalone
   - setpoints seen only in events, not snapshots (unresolved)
@@ -289,15 +291,19 @@ Vendor byte semantics (0/1 on/off) vs. live API string (`opened`/`closed`) — m
 **Script**
 - Event (1 byte): bit0 on/off, bits4-7 automation mode number
 - Status request (6 bytes): status, setpoint (2b), avg temp (2b), mode indicator (`254`=always-off, `255`=manual)
-- Write: 1 byte
+- Write: 1 byte — on/off only, does **not** set automation mode
+- Setting automation mode/preset: separate server pseudo-device `setStatus(1000:100/101/102, "ID:SID\0as:<N>"/"...\0<PresetName>")` — see [valve-heating.md](valve-heating.md#setting-automation-mode-by-indexname-from-script)
 
 **Note**
 Always has 2 reserved modes (manual, always-off) beyond any named presets.
 
 **Issues**
+- Bugs
+  - automation-preset switch leaves previous preset's outputs on — [BUG-010](../bugs.md#bug-010)
 - Quirks — details in [valve-heating.md](valve-heating.md)
   - automation-reset + state-off must be two writes ~1s apart, not one combined write
   - automation:"" (manual) write confirmed working
+  - manual mode is `as:-4`, confirmed live — the language doc's own `-3` does not work
 
 ---
 
@@ -315,15 +321,21 @@ Always has 2 reserved modes (manual, always-off) beyond any named presets.
 
 **Script**
 - Read: 7 bytes — setpoint/current (16-bit each), automation index, fan level 0-250, 8 error flags
-- Write: 1 byte or 2 bytes (status + power 0-250)
+- Write: 1 byte or 2 bytes (status + power 0-250) — neither sets automation mode
+- Setting automation mode/preset: same `1000:100/101/102` mechanism as `valve-heating`, including `as:-4` for manual — confirmed live for this type too, see [fancoil.md](fancoil.md#script)
+- Setting setpoint via script: `setStatus(1000:102, "ID:SID\0ts:<N>")` — confirmed live, works even in Manual mode (unlike the API2 `target` write, which is silently ignored there)
 
 **Note**
 Shares its automation-mode model wholesale with `valve-heating`.
 
 **Issues**
+- Bugs
+  - automation-preset switch leaves previous preset's outputs on — [BUG-010](../bugs.md#bug-010)
 - Quirks — details in [fancoil.md](fancoil.md)
   - heat/cool mode switch needs mode + state as two writes ~1s apart, not one
   - shares valve-heating's automation-reset + state-off write-ordering quirk
+  - automation switching (named preset + `as:-4` manual) confirmed live, identical to valve-heating
+  - setpoint via `ts:<N>` confirmed live, works in Manual mode unlike the API2 `target` write
   - target write may be ignored with no active automation (unconfirmed)
 
 ---
@@ -761,10 +773,13 @@ Distinct control model from `jalousie`/`gate` — those are state-only, verb-for
   - `pause` -> reads `pause` (not `paused`)
   - `stop` -> reads `stopped`
   - `next` / `previous` -> switch source, read `playing`
-- `url`: current stream/file — the only indication of what is playing, no track metadata
+  - read-only `eof`: reached the end of the track
+- `url`: current stream/file, writable — the only indication of what is playing, no track metadata
 - `volume`: float percent 0-100, snaps to 1/250 steps (0.4%)
-- `position`: string, seconds with milliseconds, e.g. `"39.784"`
-- `priority`: int, 0-250
+- `muted`: bool, present ONLY while muted — unmuting removes the key and pushes no event
+- `position`: string, `SS.mmm` / `M:SS.mmm` / `H:MM:SS.mmm`; writable (seek, in seconds, file sources only); pushed every second while playing
+- `duration`: string, same shapes — only for a source that has one (file yes, live stream no)
+- `priority`: int 0-250, an interruption stack that also gates whether a command runs at all
 - device-level `linked`: button bindings, one of the few config-time attributes that IS exposed
 
 **XML**
@@ -785,6 +800,10 @@ API2 and script views disagree on nearly every representation — string vs nume
   - write vocabulary is per-command, three different rules
   - volume snaps to 0.4% steps, so an exact-match verify reports a good write as failed
   - `next`/`previous` change the source, not the track
+  - priority stack: a lower-priority command is discarded in silence, a higher one claims the level, `stop` releases it and the source underneath resumes
+  - `priority` is rejected when written on its own — only alongside another key
+  - `muted`/`duration` are omitted rather than nulled, so merging partial updates resurrects stale values
+  - the media point fetches media itself — a URL must resolve from where the controller sits
 
 ---
 

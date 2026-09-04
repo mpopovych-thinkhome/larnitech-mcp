@@ -57,6 +57,9 @@ def _public(rec: dict) -> dict:
         "host": rec.get("host"),
         "port": rec.get("port") or DEFAULT_LOCAL_PORT,
         "allow_write": bool(rec.get("allow_write")),
+        # Optional: keep this object's snapshots with the rest of its
+        # project's files instead of in the MCP's own data folder.
+        "data_dir": rec.get("data_dir") or None,
     }
 
 
@@ -153,6 +156,24 @@ def mask(text: str, name: str | None = None) -> str:
 
 
 # --- write permission ----------------------------------------------------
+
+
+def set_data_dir(name: str, path: str | None) -> dict:
+    """Point this object's snapshots at a folder of its own, or clear it.
+
+    Useful when an installation already has a project directory holding its
+    drawings, configs and controller backups — snapshots belong there rather
+    than in a separate store keyed by object name.
+    """
+    objects = _read()
+    if name not in objects:
+        raise ConfigError(f"unknown object {name!r}")
+    if path:
+        objects[name]["data_dir"] = str(path)
+    else:
+        objects[name].pop("data_dir", None)
+    _write(objects)
+    return _public(objects[name])
 
 
 def set_allow_write(name: str, allowed: bool) -> dict:
