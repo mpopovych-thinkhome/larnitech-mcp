@@ -1,6 +1,17 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.3.1 Beta — 2026-09-04
+
+**Maintainer notes no longer ship.** The bug registry carried a long comment
+about hard links between two directories on the maintainer's machine —
+accurate there, meaningless to anyone who installed the package, and a
+description of a private layout. Any HTML comment opening with `MAINTAINER`
+is now stripped when the public copy is built. The registry's ten bug
+entries are unaffected.
+
+Release tooling only otherwise; nothing else in the package changed.
+
 ## 1.3.0 Beta — 2026-09-04
 
 **Snapshots can live with the rest of an installation's files.** An object

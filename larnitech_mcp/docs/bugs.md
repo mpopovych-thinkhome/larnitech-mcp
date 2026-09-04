@@ -1,42 +1,3 @@
-<!--
-MAINTAINER NOTE — read before editing this file.
-
-On the maintainer's machine this file exists at two paths that are the SAME
-file, joined by a hard link:
-
-    wiki/bugs.md      <- edit here, this is the knowledge base
-    mcp/bugs.md       <- the MCP server serves the docs from here
-
-Editing either one edits both, because there is only one file. But any tool
-that saves by writing a temp file and renaming over the original BREAKS the
-link: the wiki keeps your new text, the MCP copy silently keeps the old one,
-and the next published release ships stale docs. This has already happened
-three times — twice losing a freshly written BUG entry, and once while
-writing this very note, because an agent's own file-editing tool does the
-same atomic save. Assume the link is broken after every edit and check.
-
-After editing, check that both paths still point at one file — the link
-count must be 2, not 1:
-
-    ls -la wiki/bugs.md mcp/bugs.md      (second column is the link count)
-
-If it reads 1, the link broke. Restore it from the wiki copy, which is
-always the authoritative one:
-
-    rm mcp/bugs.md
-    cmd /c mklink /H mcp\bugs.md ..\wiki\bugs.md
-
-The release build (`mcp/tools/publish.py`) refuses to run when the two
-diverge, so a broken link cannot reach a release — but between releases the
-MCP would serve the stale copy, so fix it when you notice.
-
-The same applies to `api2_protocol.md`. `device-types/` is a directory
-junction and does not have this problem.
-
-This note is an HTML comment: invisible in rendered Markdown, visible to an
-agent reading the file as text.
--->
-
 # Larnitech System Bugs
 
 Numbered registry of confirmed vendor/system bugs found via live testing.
@@ -48,12 +9,6 @@ relative path to `bugs.md` depending on the referencing file's location).
 
 Each entry: found/confirmed date, affected device types, symptom,
 workaround if any, status.
-
-**Name the object and its serial freely here.** This file is the local copy
-and that detail is what makes a report actionable for the vendor's support.
-It never reaches the public package: the release build replaces every site
-name and serial with a neutral stand-in, so `test stand` ships as
-`test stand`. Write the real thing; the build handles the rest.
 
 ---
 
