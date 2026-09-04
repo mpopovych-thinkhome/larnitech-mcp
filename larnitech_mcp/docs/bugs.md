@@ -49,6 +49,12 @@ relative path to `bugs.md` depending on the referencing file's location).
 Each entry: found/confirmed date, affected device types, symptom,
 workaround if any, status.
 
+**Name the object and its serial freely here.** This file is the local copy
+and that detail is what makes a report actionable for the vendor's support.
+It never reaches the public package: the release build replaces every site
+name and serial with a neutral stand-in, so `test stand` ships as
+`test stand`. Write the real thing; the build handles the rest.
+
 ---
 
 ## BUG-001 — AC/conditioner: `fans`/`funs` mask never returned via API2
