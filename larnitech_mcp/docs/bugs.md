@@ -162,3 +162,16 @@ workaround if any, status.
   the switch that explicitly turns off every device that was on under the
   *previous* preset — do not rely on the new preset to supersede it.
 - **Status:** open (vendor side)
+
+## BUG-011 — script editor (web UI): saving fails with "script file path not found" after the logic reloads mid-edit
+
+- **Found:** 2026-09-04 (reported by user, Imerel web configurator)
+- **Affects:** web configurator — script editor, all script types (not device-specific)
+- **Symptom:** while a script is open for editing, the object's logic can be
+  reloaded/refreshed in the background. The editor keeps showing the open
+  script, but its link to the file on the controller is now stale — pressing
+  Save fails with `Не удалось найти путь к файлу сценария` ("failed to find
+  the path to the script file"). Unsaved edits in the editor are at risk.
+- **Workaround:** copy the edited text out of the editor, reload the page,
+  reopen the script and paste it back. No way to recover the link in place.
+- **Status:** open (vendor side)

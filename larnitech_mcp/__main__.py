@@ -19,6 +19,14 @@ from getpass import getpass
 from . import config
 from .client import LarnitechError, build_url, request_once
 
+# Object names and project paths here are routinely non-ASCII (Cyrillic
+# project folders, Lithuanian site names). On a cp1252 console printing one
+# raises UnicodeEncodeError and takes the command down *after* it has already
+# written the config — the change lands but looks like a failure.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 def _cmd_auth(args) -> int:
     config.get_object(args.name)

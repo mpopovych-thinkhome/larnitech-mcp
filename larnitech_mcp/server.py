@@ -73,6 +73,13 @@ def _status_note(device: dict) -> str | None:
                 "This is NO DATA: not zero, not an error. Keep the previous reading "
                 "rather than reporting these as values")
 
+    if status.get("state") == "undefined" and len(status) == 1:
+        return ("`state: \"undefined\"` — usually a device that is physically "
+                "offline (no power, off the bus): the widget still answers, the "
+                "hardware behind it does not. A few types rest at this value with "
+                "nothing wrong (virtual/plan, an unconfigured remote-control) — "
+                "check get_docs for this type before reporting it as a fault")
+
     notes = []
     if "malfunction" in status:
         notes.append(
@@ -324,6 +331,16 @@ async def list_devices(
 ) -> dict:
     """Full device snapshot from an object, optionally filtered.
 
+    **Default to this over repeated `get_device` calls.** One call returns
+    every device with its status already in it, so a single snapshot answers
+    a question about many devices — read the statuses you need out of the
+    result instead of asking for them one address at a time. One whole-object
+    call beats five targeted ones; each targeted call is its own connect and
+    round trip.
+
+    On a very large object, narrow with `area`/`device_type` rather than
+    falling back to per-device calls — a filtered snapshot is still one call.
+
     Filters are case-insensitive; `area` and `device_type` match exactly,
     `name_contains` is a substring match.
 
@@ -360,6 +377,10 @@ async def list_devices(
 @mcp.tool()
 async def get_device(object_name: str, addr: str) -> dict:
     """Current status of one device by `addr` (format `MODULE:ADDR`, e.g. `1:101`).
+
+    For one device, or to re-read one after a change. Needing several is a
+    sign to call `list_devices` once instead and read them all from that
+    snapshot.
 
     `status-get` answers thin — only addr/type/status, no name/area/masks. Those
     come from `list_devices`.

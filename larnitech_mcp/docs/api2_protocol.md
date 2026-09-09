@@ -245,6 +245,17 @@ and `modes` for climate devices.
 - **`addr` format** — `MODULE_ID:ADDR`. One physical module hosts several
   devices under different `ADDR`. IDs can be large (`2048:247`) — split on
   `:`, don't assume any particular range.
+- **`state: "undefined"` — the device is offline.** A device that is
+  physically unreachable (no power, off the bus, unplugged) still appears in
+  `get-devices` with its name and area and still answers `status-get`, but
+  its whole status reads `{"state": "undefined"}`. The widget exists; the
+  hardware behind it does not answer.
+  Caveat: the same value is the resting state of widgets that never have one
+  (a `virtual/plan` floorplan image, a `remote-control` with nothing
+  configured). So `undefined` alone does not prove a device is offline — but
+  on a type that normally reports real keys, it does.
+  Distinct from an all-`null` status, which means the device answered and
+  had no reading this poll cycle.
 - **Which key holds the value depends on type** — there is no single
   convention. See the per-type `API` section in
   [device-types/device_types.md](device-types/_device_types.md).

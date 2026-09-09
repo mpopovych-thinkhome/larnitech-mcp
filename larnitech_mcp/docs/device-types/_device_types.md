@@ -5,6 +5,10 @@ values, same byte numbers). If they disagree and it's unclear which side is
 current, ask the user rather than guessing — see the sync rule in
 [the README](https://github.com/mpopovych-thinkhome/larnitech-mcp#readme).
 
+A status of `{"state": "undefined"}` on any type usually means the device
+is physically offline — see
+[api2_protocol.md](../api2_protocol.md#common-quirks-all-commands).
+
 `Issues` names every bug and quirk of that type by short title only — never
 a description — so an agent scanning this file knows an issue exists and
 can decide whether to open the type file.
@@ -46,6 +50,11 @@ can decide whether to open the type file.
 | [percent-sensor](percent-sensor.md#percent-sensor)                | Generic scalar readout, value is NOT a percent as-is       | quirk    |
 | [float-sensor](float-sensor.md#float-sensor)                      | Generic scalar readout, scale not established              | quirk    |
 | [current-sensor](current-sensor.md#current-sensor)                | Electrical current in amperes, encoding unconfirmed        | —        |
+| [voltage-sensor](voltage-sensor.md#voltage-sensor)                | Simple voltage readout, unit unconfirmed                   | —        |
+| [intercom](intercom.md#intercom)                                  | The system's own door station; exposes its door and camera links | unread |
+| [mic](mic.md#mic)                                                 | Microphone of the intercom, status unread                  | unread   |
+| [security-card-reader](security-card-reader.md#security-card-reader) | Card reader of the intercom, status unread              | unread   |
+| [rtsp](rtsp.md#rtsp)                                              | A camera added to the system, status unread                | unread   |
 | [blinds](blinds.md#blinds)                                        | Position/target device, 0=open/100=closed — distinct from `jalousie`/`gate` | quirk |
 
 ---
@@ -869,3 +878,105 @@ Same family as `percent-sensor`/`float-sensor`, but names its quantity in the ty
 
 **Issues**
 - none recorded
+
+---
+
+### voltage-sensor
+
+**API**
+- `state`: number — voltage; read 16-18 across four devices, unit and scaling unconfirmed
+- Read-only
+
+**XML**
+- plain item, seen with `area: "Setup"`
+
+**Script**
+- not documented
+
+**Note**
+Same family as `current-sensor`/`percent-sensor`/`float-sensor` — generic scalar readouts.
+
+**Issues**
+- none recorded
+
+---
+
+### intercom
+
+**API**
+- `state`: only ever read as `"undefined"` — from an OFFLINE door station, so the live status is unknown
+- device-level `door`: address of the lock it opens
+- device-level `cameras`: address of its `rtsp` camera
+- device-level `linked`: bound button addresses
+
+**XML**
+- `door`, `cameras`, `linked` — and unusually these config-time links DO reach API2
+
+**Script**
+- not documented
+
+**Note**
+The system's own door station. Comes as a family on one module with `mic`, `security-card-reader` and `rtsp`.
+
+**Issues**
+- status never read from live hardware (only offline)
+
+---
+
+### mic
+
+**API**
+- `state`: only ever read as `"undefined"` — from an OFFLINE door station, so the live status is unknown
+- Read-only
+
+**XML**
+- plain item on the intercom's module
+
+**Script**
+- not documented
+
+**Note**
+Microphone of the `intercom`.
+
+**Issues**
+- status never read from live hardware (only offline)
+
+---
+
+### security-card-reader
+
+**API**
+- `state`: only ever read as `"undefined"` — from an OFFLINE door station, so the live status is unknown
+- Read-only
+
+**XML**
+- plain item on the intercom's module
+
+**Script**
+- not documented
+
+**Note**
+Card reader of the `intercom`.
+
+**Issues**
+- status never read from live hardware (only offline)
+
+---
+
+### rtsp
+
+**API**
+- `state`: only ever read as `"undefined"` — from an OFFLINE camera, so the live status is unknown; the device record carries no stream URL or credentials
+- Read-only
+
+**XML**
+- a camera reference; an `intercom` points at one through its `cameras` attribute
+
+**Script**
+- not documented
+
+**Note**
+A camera added to the system — a reference to something configured elsewhere, not a source of video metadata.
+
+**Issues**
+- status never read from live hardware (only offline)

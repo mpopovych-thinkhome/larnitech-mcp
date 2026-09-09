@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
 
-**Version 1.3.1 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.3.2 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -40,9 +40,10 @@ occasionally not key/value at all.
 | `get_docs("protocol")` | API2 protocol reference |
 
 Responses flag statuses that need care: an opaque `hex` blob, a
-`malfunction` fault code in place of a normal reading, or an all-`null`
+`malfunction` fault code in place of a normal reading, an all-`null`
 payload from a meter that missed its poll cycle — which means *no data*,
-not zeros.
+not zeros — or a bare `state: "undefined"`, which is how a device that is
+physically offline still answers.
 
 **Watching** — non-blocking, for "press the switch and tell me what moved".
 

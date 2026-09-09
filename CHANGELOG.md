@@ -1,6 +1,51 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.3.2 Beta — 2026-09-09
+
+**`state: "undefined"` means the device is offline.** A device that is
+physically unreachable — no power, off the bus — still appears in
+`get-devices` with its name and area and still answers `status-get`, but its
+whole status reads `{"state": "undefined"}`. The widget is there; the
+hardware behind it is not answering. Responses now flag this the way they
+already flagged an all-`null` meter reading, and the protocol reference
+explains it. The caveat is documented too: a few widgets rest at that value
+with nothing wrong (a `virtual/plan` floorplan image, a `remote-control`
+with nothing configured), so `undefined` alone does not prove a device is
+down — but on a type that normally reports real keys, it does.
+
+**The door-station types were documented from an offline door station.**
+`intercom`, `mic`, `security-card-reader` and `rtsp` were all recorded in
+1.3.1 as types that "carry nothing", on the strength of a single pass that
+turned out to have caught the panel while it was down. Their status is now
+marked **unknown** rather than absent, with a note to re-test against live
+hardware. One fact from that pass survives and is worth keeping: the
+intercom's `door`, `cameras` and `linked` attributes came through with the
+hardware off, so that wiring is served by the controller, not by the panel.
+
+**Five more device types.** `rtsp` (a camera added to the system),
+`intercom` (the system's own door station), `mic` and
+`security-card-reader` (its microphone and card reader), and
+`voltage-sensor`. Forty documented types now.
+
+**One more bug on record.** BUG-011 — in the web configurator's script
+editor, a background reload of the object's logic leaves the open script
+without a working link to its file, and Save then fails; the text has to be
+copied out, the page reloaded, and the script pasted back. Written up after
+1.3.1 was built, so it ships here.
+
+**Ask for the whole object, not one device at a time.** `list_devices`
+returns every device with its status already in it, so a question about
+several devices is one call, not five. The tool descriptions now say so —
+and say to narrow a large object with `area`/`device_type` rather than
+falling back to per-device reads, since a filtered snapshot is still a
+single call.
+
+**Non-ASCII paths no longer take the CLI down.** `data-dir` pointed at a
+project folder with Cyrillic in its name wrote the setting correctly and
+then crashed printing it back, on a `cp1252` Windows console — the change
+landed but looked like a failure. Both output streams are now UTF-8.
+
 ## 1.3.1 Beta — 2026-09-04
 
 **Maintainer notes no longer ship.** The bug registry carried a long comment
