@@ -1,3 +1,5 @@
+<a id="valve-heating"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#valve-heating) — keep both in sync.
 
 ## XML attributes
@@ -23,6 +25,36 @@ Source: https://wiki.larnitech.com/Valve-heating
 `<automation>` child elements (presets): `name` (identifier),
 `temperature-level` (required setpoint), optional `time-interval` with
 `temperature-level`/`start-time`/`end-time`/`week-days` for scheduling.
+
+`<protect>` child elements: the overheat/lockout cutout, and the only one
+that overrides the control loop rather than bounding it — `sensor-cr` and
+`t-min`/`t-max` above are bounds the loop itself respects. This is where
+305 of the 341 protects in the object base live.
+
+### The base protect
+
+**Overheat cutout off the circuit's own floor probe. This is the default
+protect for any `warm-floor` circuit — assume a floor circuit needs one and
+justify leaving it out, not the other way round.**
+
+```xml
+<item addr="118:7" type="valve-heating" sub-type="warm-floor" temperature-sensors="119:9" ...>
+	<automation name="Eco" temperature-level="22"/>
+	<protect device="119:9" status="off" treshold="30" type="above"/>
+</item>
+```
+
+`device` is the floor probe — normally the same address the circuit already
+controls by, but it does not have to be: a protect may watch a sensor the
+loop never reads. One `<protect>` per probe the room has.
+
+`treshold` by circuit, from what the objects use: 30 water, 32 typical,
+35 electric mat. Above the floor-surface limit the room is designed for
+(EN 1264: 29 °C living, 33 °C bathrooms and edge zones) the protect stops
+being a protect.
+
+Every other form — frost hold, condensation lockout, mode interlock — and the
+element itself are in separate notes on `<protect>` lockouts.
 
 ## API
 
@@ -117,7 +149,8 @@ defines an `<automation>` block.
 
 - (2026-08-18) **Resetting `automation` to manual and turning the channel off must be TWO separate, spaced-out `status-set` calls, not one combined write.** Confirmed live on `1:5` (had a named preset active, `state: "on"`): `{"automation": "", "state": "off"}` in one call, and two separate calls sent immediately back-to-back, both end with `automation` cleared (confirmed via a fresh `status-get`, not just the write ack) but `state` still `"on"`. The controller appears to re-evaluate the channel's own on/off logic right after an automation is cleared, and that re-evaluation turns it back on — landing *after* an `off` that arrived too soon in the same burst. Working sequence: write `{"automation": ""}` alone, wait **~1s**, then write `{"state": "off"}` alone. Confirmed working with exactly this pacing. Same mechanism reproduced on [fancoil](fancoil.md) and [vent](vent.md).
 - (2026-09-03) **Manual mode via script is `as:-4`, not `as:-3`**: `setStatus(1000:102, "ID:SID\0as:-4")` confirmed live to switch a valve-heating circuit to Manual; `as:-3` (the value the language doc's own numeric-shortcut table lists for manual) does **not** work. Same mechanism confirmed identical on fancoil.
-- (2026-08-18) Writing `automation: ""` (empty string) to return to manual mode is now **confirmed working** — the key disappears from `status` entirely on the next read, matching the "absent = manual" read-side convention documented above. (`"always-off"` as a write value is still unconfirmed.)
+- (2026-08-18) Writing `automation: ""` (empty string) to return to manual mode is now **confirmed working** — the key disappears from `status` entirely on the next read, matching the "absent = manual" read-side convention documented above. (`"always-off"` as a write value was confirmed later — see the 2026-09-15 entry.)
+- (2026-09-15) **`"always-off"` as a write value is confirmed working.** A single `{"automation": "always-off"}` write is enough — no two-step sequence, unlike clearing an automation. The controller then drops the channel itself: `state` goes `on` → `off` without being asked (arrives as an unrequested change a beat after the write), and `target` disappears from `status`, same as in manual. Verified on five `valve-heating` channels in one pass, each read back from an independent `status-get` afterwards.
 
 ## Known bugs
 

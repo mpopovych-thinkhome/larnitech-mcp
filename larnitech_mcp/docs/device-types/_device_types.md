@@ -9,6 +9,10 @@ A status of `{"state": "undefined"}` on any type usually means the device
 is physically offline — see
 [api2_protocol.md](../api2_protocol.md#common-quirks-all-commands).
 
+The `<protect>` child element — a lockout some *other* device forces on this
+one, seen on `valve-heating`, `AC`, `lamp`, `jalousie` and `dimmer-lamp` items
+— is documented once in separate notes on `<protect>` lockouts, not per type.
+
 `Issues` names every bug and quirk of that type by short title only — never
 a description — so an agent scanning this file knows an issue exists and
 can decide whether to open the type file.
@@ -42,7 +46,7 @@ can decide whether to open the type file.
 | [ir-transmitter](ir-transmitter.md#ir-transmitter)                | IR blaster, vendor page is a stub                          | —        |
 | [ir-receiver](ir-receiver.md#ir-receiver)                         | IR receiver, one-shot capture                              | —        |
 | [remote-control](remote-control.md#remote-control)                | RF remote learning widget, little confirmed                | quirk    |
-| [script](script.md#script)                                        | An Imerel script instance as a device                      | —        |
+| [script](script.md#script)                                        | An Imerel script instance as a device                      | quirk    |
 | [com-port](com-port.md#com-port)                                  | RS232/serial port reference, no status                     | —        |
 | [gate](gate.md#gate)                                              | Gate/door, digest oversimplifies to on/off                 | conflict |
 | [jalousie](jalousie.md#jalousie)                                  | Motorized blind/shutter, same open/close model as `gate`   | quirk    |
@@ -296,6 +300,7 @@ Vendor byte semantics (0/1 on/off) vs. live API string (`opened`/`closed`) — m
 - `undefined-behavior`: `on`/`off`/`last`, default `last`
 - `t-min`/`t-max`: default 0/32
 - `<automation>` children: `name`, `temperature-level`, optional schedule
+- `<protect>` children: overheat cutout off the floor probe (`type="above"`, `status="off"`, `treshold` 30/32/35) — the default for a `warm-floor` circuit, overrides the loop instead of bounding it — separate notes on `<protect>` lockouts
 
 **Script**
 - Event (1 byte): bit0 on/off, bits4-7 automation mode number
@@ -312,6 +317,7 @@ Always has 2 reserved modes (manual, always-off) beyond any named presets.
 - Quirks — details in [valve-heating.md](valve-heating.md)
   - automation-reset + state-off must be two writes ~1s apart, not one combined write
   - automation:"" (manual) write confirmed working
+  - automation:"always-off" write confirmed — one write, no sequence; controller drops state to off itself and target leaves status
   - manual mode is `as:-4`, confirmed live — the language doc's own `-3` does not work
 
 ---
@@ -675,10 +681,14 @@ Very little confirmed — only that `state` exists and reads `"undefined"` with 
 ### script
 
 **API**
-- `state`: on/off (per general table, not separately reconfirmed for this type)
+- reads and writes exactly like a `lamp` — not a one-shot trigger
+- `state`: on/off, writable
+- `auto-state`: bool, auto mode — same flag as `lamp`, undocumented for this type; omitted rather than nulled
 
 **XML**
 - `path` or `body` (one required), `name`, `addr`, custom `NAME` params
+- also seen live, not on the vendor page: `id`, `image`, `script-folder` (base64 of an XPath into the config)
+- none of the XML attributes reach API2
 
 **Script**
 - Status: `0x00` off, `0x01` on, `0xFF` toggle
@@ -687,7 +697,8 @@ Very little confirmed — only that `state` exists and reads `"undefined"` with 
 Represents an Imerel script instance as a device — see separate script-authoring notes for script-authoring patterns, different subject.
 
 **Issues**
-- none recorded
+- Quirks — details in [script.md](script.md)
+  - mutually exclusive script groups (house modes, seasons) are per-object configuration, not a property of the type
 
 ---
 

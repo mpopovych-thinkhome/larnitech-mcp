@@ -1,3 +1,5 @@
+<a id="climate-control"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#climate-control) — keep both in sync.
 
 ## XML attributes

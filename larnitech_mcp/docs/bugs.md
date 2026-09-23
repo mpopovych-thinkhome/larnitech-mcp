@@ -12,6 +12,7 @@ workaround if any, status.
 
 ---
 
+<a id="bug-001"></a>
 ## BUG-001 — AC/conditioner: `fans`/`funs` mask never returned via API2
 
 - **Found:** 2026-08-14 · **Confirmed:** 2026-08-14 (twice, `fans="0x47"` and later `fans="0x77"`)
@@ -23,6 +24,7 @@ workaround if any, status.
   conditioner. The real configured mask cannot be read via API2.
 - **Status:** open (vendor side)
 
+<a id="bug-002"></a>
 ## BUG-002 — conditioner: `modes` returned as if no mask were set
 
 - **Found:** 2026-08-17
@@ -35,6 +37,7 @@ workaround if any, status.
   always treat as the full default set.
 - **Status:** open (vendor side)
 
+<a id="bug-003"></a>
 ## BUG-003 — AC: fan speeds 4/5/silent unreadable via API2
 
 - **Found:** 2026-08-17
@@ -48,6 +51,7 @@ workaround if any, status.
   has invalid parameter"}`).
 - **Status:** open (vendor side)
 
+<a id="bug-004"></a>
 ## BUG-004 — AC: official wiki documents 8 status bytes, actual is 9
 
 - **Found:** 2026-08-18
@@ -58,6 +62,7 @@ workaround if any, status.
 - **Workaround:** none needed — use 9 bytes, it is what actually works.
 - **Status:** open (vendor doc error, not a runtime bug)
 
+<a id="bug-005"></a>
 ## BUG-005 — `statuses` push events never identify the exciter
 
 - **Found:** 2026-08-27
@@ -71,6 +76,7 @@ workaround if any, status.
   via API2 push events.
 - **Status:** open (vendor side)
 
+<a id="bug-006"></a>
 ## BUG-006 — API2 does not expose `system` widget attribute
 
 - **Found:** 2026-08-27
@@ -91,6 +97,7 @@ workaround if any, status.
   `system` that also has a real name/area set.
 - **Status:** open (vendor side)
 
+<a id="bug-007"></a>
 ## BUG-007 — `light-scheme` (ls-type 0/3): no status-change event when a slave changes state, only on a direct widget press
 
 - **Found:** 2026-08-28 (live watch, test stand, addr `1:211`, `ls-type=3`)
@@ -108,6 +115,7 @@ workaround if any, status.
   triggered on or off," not "are the slaves currently in that state."
 - **Status:** open (protocol limitation, not fixable client-side)
 
+<a id="bug-008"></a>
 ## BUG-008 — WebSocket: no pong on ping, and session close sends no close frame
 
 - **Found:** undated (documented in [api2_protocol.md](api2_protocol.md#common-quirks-all-commands) quirks list, not previously tracked as a numbered bug)
@@ -125,6 +133,7 @@ workaround if any, status.
   on disconnect.
 - **Status:** open (vendor side)
 
+<a id="bug-009"></a>
 ## BUG-009 — `speaker`: an invalid `state` write drives the widget into `error`
 
 - **Found:** 2026-09-02 (live, demo case, addr `5:30`)
@@ -143,6 +152,7 @@ workaround if any, status.
   `play`, which restores normal playback.
 - **Status:** open (vendor side)
 
+<a id="bug-010"></a>
 ## BUG-010 — climate-control/valve-heating/fancoil: switching the whole-house automation preset does not turn off outputs left on by the previous preset
 
 - **Found:** 2026-09-04 (reported by user, another installation)
@@ -163,6 +173,7 @@ workaround if any, status.
   *previous* preset — do not rely on the new preset to supersede it.
 - **Status:** open (vendor side)
 
+<a id="bug-011"></a>
 ## BUG-011 — script editor (web UI): saving fails with "script file path not found" after the logic reloads mid-edit
 
 - **Found:** 2026-09-04 (reported by user, Imerel web configurator)

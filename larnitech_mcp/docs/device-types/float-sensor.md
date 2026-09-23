@@ -1,3 +1,5 @@
+<a id="float-sensor"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#float-sensor) — keep both in sync.
 
 ## XML attributes

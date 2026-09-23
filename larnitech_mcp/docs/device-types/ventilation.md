@@ -1,3 +1,5 @@
+<a id="ventilation"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#ventilation) — keep both in sync.
 
 `type="virtual" sub-type="ventilation"` — see also [virtual.md](virtual.md)

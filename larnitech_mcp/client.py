@@ -1,8 +1,9 @@
 """Larnitech API2 WebSocket client.
 
 Two usage shapes over one implementation:
-  - `request_once` — connect, authorize, one request, close. Used by the
-    read/write tools, which are short and independent.
+  - `request_once` — one request over a pooled authorized socket, kept
+    open for a few minutes so a burst of tool calls shares one connection.
+    Used by the read/write tools.
   - `Session` — a kept-open authorized socket. Only `watch` needs this, to
     receive pushed `statuses` events.
 
@@ -159,7 +160,82 @@ class Session:
         await self.close()
 
 
+# --- session pool --------------------------------------------------------
+
+# An agent asks in bursts: a snapshot, then a couple of follow-up reads, then
+# a write. Reconnecting for each costs a connect + authorize round trip
+# (200-250 ms) and takes a fresh session slot on the controller, so an
+# authorized socket is kept after a request and reused by the next one.
+# Four minutes, deliberately under the controller's own ~5-minute idle
+# timeout: the pool retires a socket while it is still known to be alive
+# instead of handing out one the server has already dropped.
+IDLE_TIMEOUT = 240.0
+_REAP_INTERVAL = 20.0
+
+
+class _Pooled:
+    def __init__(self, session: Session):
+        self.session = session
+        # A response carries no request id, so two requests in flight on one
+        # socket could take each other's answer. One at a time per controller.
+        self.lock = asyncio.Lock()
+        self.used = asyncio.get_running_loop().time()
+
+
+_pool: dict[str, _Pooled] = {}
+_pool_loop: asyncio.AbstractEventLoop | None = None
+_reaper: asyncio.Task | None = None
+
+
+async def _reap_loop() -> None:
+    while _pool:
+        await asyncio.sleep(_REAP_INTERVAL)
+        now = asyncio.get_running_loop().time()
+        for url, entry in list(_pool.items()):
+            if entry.lock.locked() or now - entry.used <= IDLE_TIMEOUT:
+                continue
+            _pool.pop(url, None)
+            await entry.session.close()
+
+
+async def _pooled(obj: dict, key: str, url: str) -> _Pooled:
+    global _pool_loop, _reaper
+    loop = asyncio.get_running_loop()
+    if _pool_loop is not loop:
+        # A CLI command runs its own event loop; a socket cannot cross into it.
+        _pool.clear()
+        _pool_loop = loop
+    entry = _pool.get(url)
+    if entry is None:
+        session = Session(obj, key)
+        await session.open()
+        entry = _pool[url] = _Pooled(session)
+    if _reaper is None or _reaper.done():
+        _reaper = loop.create_task(_reap_loop())
+    return entry
+
+
 async def request_once(obj: dict, key: str, payload: dict) -> dict:
-    """Connect, authorize, one request, close."""
-    async with Session(obj, key) as session:
-        return await session.request(payload)
+    """One request over a kept-open authorized socket.
+
+    The socket stays in the pool for `IDLE_TIMEOUT` after the request and the
+    next call reuses it, so a burst of tool calls costs one connect, not one
+    per call.
+    """
+    url = build_url(obj)
+    for attempt in (1, 2):
+        entry = await _pooled(obj, key, url)
+        async with entry.lock:
+            try:
+                answer = await entry.session.request(payload)
+            except LarnitechError:
+                # The controller drops an idle session without sending a close
+                # frame, so a dead socket only announces itself on use. Retire
+                # it and try once more on a fresh one.
+                _pool.pop(url, None)
+                await entry.session.close()
+                if attempt == 2:
+                    raise
+                continue
+            entry.used = asyncio.get_running_loop().time()
+            return answer

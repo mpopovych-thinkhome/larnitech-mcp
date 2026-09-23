@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
 
-**Version 1.3.2 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.3.3 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -28,6 +28,12 @@ checked before every write, and listed in this README's own safety section.
 | `check_connection` | connect, authorize, report device count |
 | `list_devices` | full snapshot, filterable by area / type / name |
 | `get_device` | status of one device by address |
+
+Consecutive calls share one authorized connection: the socket stays open
+for four minutes after a request, so a burst of reads costs one connect
+instead of one per call. It is retired before the controller's own
+five-minute idle timeout, and one the controller has already dropped is
+replaced without the call failing.
 
 **Understanding what came back** — statuses are type-specific and
 occasionally not key/value at all.

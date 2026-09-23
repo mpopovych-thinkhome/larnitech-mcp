@@ -1,3 +1,5 @@
+<a id="light-scheme"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#light-scheme) — keep both in sync.
 
 ## XML attributes

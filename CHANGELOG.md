@@ -1,6 +1,67 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.3.3 Beta — 2026-09-09
+
+**Docs.** Every type file and every bug entry now carries an explicit
+anchor, so a `#bug-001` or `#vent` reference actually lands where it says.
+`valve-heating` gains the `<protect>` lockout section — the overheat cutout
+that overrides a circuit's control loop rather than bounding it, which is
+where the overwhelming majority of protects in a real installation live.
+`script` gains the XML attributes seen live but missing from the vendor
+page, including `script-folder` as base64 of an XPath into the config.
+
+`<protect>` itself is XML-only — `list_devices` and `get_device` never
+return it — so the full reference stays in the maintainer's knowledge base
+and the type docs mention it in prose rather than linking to a file this
+package does not ship.
+
+**Fixed: the server could refuse to connect at all.** The SDK serves two
+protocol eras over one stdio connection and lets the client's first frame
+choose: a request carrying the 2026-07-28 `_meta` envelope locks the
+connection into the modern era, where `initialize` is then refused for the
+life of that connection — `-32022: connection is serving the 2026-07-28
+protocol; the initialize handshake is not accepted`. A client that probes
+with an enveloped request and then falls back to the handshake never gets
+in, and restarting does not help, because it opens the same way every time.
+Reproduced against a five-line stock SDK server, and on every SDK version
+from 2.0.1 to 2.2.0 — it is the era negotiation, not this package.
+
+The server now drives the SDK's handshake-only loop, which makes the order
+harmless: a stray enveloped frame is answered `-32602` and the `initialize`
+behind it succeeds. Clients that open with the handshake — all of them
+today — are unaffected.
+
+**A write no longer pulls the whole object.** `set_device` used to fetch a
+full detailed `get-devices` just to find one device by address — 260 KB and
+a quarter of a second on a 1853-device object, on every single write. It now
+takes the device's record (type, sub-type, name, area) from a per-object
+cache held for a minute and asked for without `detailed`, and reads the live
+status by address. A write on that object went from ~230 ms to ~120 ms, and
+a burst of them transfers 176 KB once instead of 260 KB each time. An
+address missing from the cache refetches rather than reporting a device that
+exists as absent, and the previewed status is always read fresh — only the
+name and type come from the cache, and those do not change while an agent
+works.
+
+**One connection for a burst of calls.** Every read used to be its own
+connect, authorize, request, close — 200-250 ms of round trip before the
+question was even asked, and a fresh session slot on the controller each
+time. An authorized socket now stays in a pool for four minutes after a
+request and the next call reuses it. Measured on a 95-device object: 727 ms
+for the first call, 170 ms for the next.
+
+Four minutes is deliberately under the controller's own ~5-minute idle
+timeout, so the pool retires a socket while it is still known to be alive
+rather than handing out one the server has quietly dropped. When that
+happens anyway — the server closes without a close frame, so a dead socket
+only announces itself on use — the call reconnects and retries once instead
+of failing.
+
+Requests to one controller are serialized: an API2 response carries no
+request id, so two in flight on one socket could take each other's answer.
+`watch` is unaffected; it keeps its own session, as before.
+
 ## 1.3.2 Beta — 2026-09-09
 
 **`state: "undefined"` means the device is offline.** A device that is

@@ -17,7 +17,10 @@ import secrets
 import time
 from collections import Counter
 
+import anyio
 from mcp.server import MCPServer
+from mcp.server.runner import serve_loop
+from mcp.server.stdio import stdio_server
 
 from . import config, docs, report, snapshots, validate, watch
 from .client import LarnitechError, Session, build_url, request_once
@@ -493,6 +496,31 @@ def _find_device(devices: list[dict], addr: str) -> dict | None:
     return next((d for d in devices if d.get("addr") == addr), None)
 
 
+# A write needs the device's record — type, sub-type, name, area — and its
+# live status. The record only comes with a full `get-devices`, which on a
+# large object is a quarter of a megabyte and a second of transfer, while a
+# name or a sub-type does not change while an agent works. So the record is
+# cached briefly and asked for *without* `detailed` (a third smaller, ten
+# times faster), and the status is read by address instead.
+_RECORDS_TTL = 60.0
+_records: dict[str, tuple[float, list[dict]]] = {}
+
+
+async def _device_record(obj: dict, key: str, object_name: str, addr: str) -> dict | None:
+    """That device's record, from a short-lived per-object cache."""
+    cached = _records.get(object_name)
+    if cached and cached[0] > time.monotonic():
+        device = _find_device(cached[1], addr)
+        if device is not None:
+            return device
+        # Not in the cached set: it may have been added since. Fall through
+        # and refetch rather than reporting a device that exists as missing.
+    answer = await request_once(obj, key, {"request": "get-devices"})
+    devices = answer.get("devices", [])
+    _records[object_name] = (time.monotonic() + _RECORDS_TTL, devices)
+    return _find_device(devices, addr)
+
+
 @mcp.tool()
 async def set_device(
     object_name: str,
@@ -540,12 +568,18 @@ async def set_device(
         return {"ok": False, "errors": [str(err)]}
 
     try:
-        answer = await request_once(obj, key, {"request": "get-devices", "status": "detailed"})
+        device = await _device_record(obj, key, object_name, addr)
+        if device is None:
+            return {"ok": False, "error": f"no device at {addr} on {object_name!r}"}
+        # The record can be up to a minute old; the status it previews must
+        # not be, so read that fresh by address.
+        answer = await request_once(
+            obj, key, {"request": "status-get", "addr": addr, "status": "detailed"}
+        )
     except LarnitechError as err:
         return {"ok": False, "error": config.mask(str(err), object_name)}
-    device = _find_device(answer.get("devices", []), addr)
-    if device is None:
-        return {"ok": False, "error": f"no device at {addr} on {object_name!r}"}
+    live = answer.get("devices") or [{}]
+    device = {**device, "status": live[0].get("status")}
 
     dtype = (device.get("type") or "").lower()
     current = device.get("status") if isinstance(device.get("status"), dict) else {}
@@ -796,4 +830,33 @@ def read_snapshot(object_name: str, file: str) -> dict:
 
 
 def main() -> None:
-    mcp.run()
+    """Serve on stdio, handshake era only.
+
+    `MCPServer.run()` serves both protocol eras and lets the client's *first*
+    frame decide which: a request carrying the 2026-07-28 `_meta` envelope
+    locks the connection into the modern era, where `initialize` is then
+    refused for the life of that connection with
+    `-32022: connection is serving the 2026-07-28 protocol`. A client that
+    opens with such a probe and then falls back to the handshake can never
+    connect — observed against Claude Code, on every SDK version from 2.0 to
+    2.2, and a restart does not help because the client opens the same way
+    every time.
+
+    Driving the SDK's handshake-only loop instead makes the order harmless:
+    the stray enveloped frame is answered with `-32602` and the `initialize`
+    behind it succeeds.
+    """
+    low = mcp._lowlevel_server
+
+    async def serve() -> None:
+        async with stdio_server() as (read_stream, write_stream):
+            async with low.lifespan(low) as lifespan_state:
+                await serve_loop(
+                    low,
+                    read_stream,
+                    write_stream,
+                    lifespan_state=lifespan_state,
+                    init_options=low.create_initialization_options(),
+                )
+
+    anyio.run(serve)

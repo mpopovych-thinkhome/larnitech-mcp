@@ -1,3 +1,5 @@
+<a id="ir-transmitter"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#ir-transmitter) — keep both in sync.
 
 ## XML attributes

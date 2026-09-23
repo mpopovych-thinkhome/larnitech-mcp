@@ -1,3 +1,5 @@
+<a id="conditioner"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#conditioner) — keep both in sync.
 
 ## XML attributes

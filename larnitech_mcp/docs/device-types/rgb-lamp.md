@@ -1,3 +1,5 @@
+<a id="rgb-lamp"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#rgb-lamp) — keep both in sync.
 
 ## XML attributes

@@ -1,3 +1,5 @@
+<a id="voltage-sensor"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#voltage-sensor) — keep both in sync.
 
 ## XML attributes

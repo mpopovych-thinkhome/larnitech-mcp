@@ -1,3 +1,5 @@
+<a id="fancoil"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#fancoil) — keep both in sync.
 
 ## XML attributes

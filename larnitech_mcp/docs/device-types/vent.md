@@ -1,3 +1,5 @@
+<a id="vent"></a>
+
 Digest of this file lives in [device_types.md](_device_types.md#vent) — keep both in sync.
 
 ## XML attributes
