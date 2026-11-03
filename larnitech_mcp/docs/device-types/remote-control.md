@@ -1,6 +1,6 @@
 <a id="remote-control"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#remote-control) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#remote-control) — keep those in sync.
 
 ## XML attributes
 

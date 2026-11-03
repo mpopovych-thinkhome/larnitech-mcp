@@ -186,3 +186,12 @@ workaround if any, status.
 - **Workaround:** copy the edited text out of the editor, reload the page,
   reopen the script and paste it back. No way to recover the link in place.
 - **Status:** open (vendor side)
+
+<a id="bug-012"></a>
+## BUG-012 — `<protect>` watching a `lamp`: the host is held at `status` even when the lamp is not in the condition state
+
+- **Found:** 2026-11-02 (reported by user, another installation) — not reproduced from this side, no live test yet
+- **Affects:** `<protect>` lockouts whose watched device is a `lamp` — in practice a virtual mode flag (`1:101` HEAT MODE, `1:102` COOL MODE) on a `valve-heating` or `fancoil` host. Case reported: `type="on"` on the flag, `status="off"` on the host
+- **Symptom:** the host stays forced to `status` while the watched lamp is **off**, when the condition is not met. On 194 a season lock built this way blocks the wrong season: fancoils (protect on HEAT MODE) cannot turn on in summer although HEAT MODE is off, and warm floors (protect on COOL MODE) cannot turn on in winter although COOL MODE is off. Not known whether the protect releases when the lamp is on
+- **Workaround:** do not use a lamp-watching protect. Keep it commented out (`<!--<protect device="1:102" status="off" type="on"/>-->`, as on 195) and lock the other season's devices in the season-switch script — the same script as the [BUG-010](#bug-010) workaround. Protects watching a `door-sensor` (virtual alarm contacts) are in production on 190; that a season flag published as one would behave is untested
+- **Status:** open (vendor side), not yet reported to the vendor

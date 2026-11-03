@@ -1,6 +1,6 @@
 <a id="temperature-sensor"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#temperature-sensor) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#temperature-sensor) — keep those in sync.
 
 ## XML attributes
 
@@ -22,16 +22,24 @@ Source: https://wiki.larnitech.com/Temperature-sensor
 
 ## Script
 
-Status bytes (2 bytes):
-- byte 0 — fractional part: `(value % 10) * 256 / 10`
-- byte 1 — integer part: `value / 10`
+Status bytes (2 bytes), a signed fixed-point value:
+- byte 0 — fraction × 256 (0…255, always positive)
+- byte 1 — whole degrees, signed, **rounded down**
 
-Where `value` = temperature × 10 (e.g. from Modbus with scale 0.1).
+`value` = temperature × 10 (e.g. from Modbus with scale 0.1). For negatives the whole part is rounded down and the fraction counted up from it: −5.3 °C = −6 + 179/256.
 
 ```c
-i16 temp = mbs_values[REG_TEMP];  // e.g., 235 = 23.5°C
-setStatus(WGT_TEMP, {(temp % 10) * 256 / 10, temp / 10});
+// value x10 -> status; works for negatives
+i16 _int  = value / 10;
+i16 _frac = value % 10;
+if (_frac < 0) {          // C division truncates toward zero
+    _int = _int - 1;
+    _frac = _frac + 10;
+}
+setStatus(WGT_TEMP, {_frac*256/10, _int});
 ```
+
+**Wrong for negatives:** `{(value % 10) * 256 / 10, value / 10}` — −5.3 °C becomes −5 + 180/256 = −4.3 °C. Fine only for values ≥ 0; it was in TCL, WallPanel_ISMA and the old block (fixed in HeatPump_Nibe V0.2, confirmed live: glycol −1.8 °C shown correctly on object 194, 2026-10-21).
 
 **Note:** the fractional encoding differs from the `AC` widget (×250/10
 there vs ×256/10 here).

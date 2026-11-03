@@ -1,6 +1,6 @@
 <a id="conditioner"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#conditioner) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#conditioner) — keep those in sync.
 
 ## XML attributes
 
@@ -39,13 +39,29 @@ it and falls back to the default mask.
 
 ## Script
 
-6-byte status response: power state, temperature, horizontal/vertical vane
-positions, airflow capacity settings (byte-level split not yet confirmed
-live for this type — see [ac.md](ac.md) for the confirmed 9-byte `AC`
-layout, which this is related to but not identical with).
+Status written from a script — 5 bytes, used by production scripts
+(`scripts/ready-scripts/state-restore/RestoreStatus_Cond_16pcs`, NEST support script):
+
+- byte 0 — `(mode<<4) + state`: bit0 on/off, bits 4-7 mode
+- byte 1 — setpoint as **°C − 16** (16…31 °C → 0…15; **differs from `AC`**, where byte 2 holds plain °C). Confirmed live 2026-10-19: writing `20` showed `target: 36`. The NEST support script writes `0` for the lowest setpoint
+- byte 2 — 0
+- byte 3 — vanes
+- byte 4 — fan speed
+
+```c
+// cool, on, 22 C, keep vanes, fan speed 2
+u8 st[9];
+getStatus(@id:@sid, &st, 9);
+setStatus(@id:@sid, {(1<<4) + 1, 22 - 16, 0, st[3], 2}, 5);
+```
+
+`getStatus` of a conditioner on another module works only if the script also has a `V-ID` handler for it — see the script-language notes.
 
 Operation modes byte (bits 4-7), same numbering as `AC`:
 - 0 fan, 1 cool, 2 dry, 3 heat, 4 auto
+
+The vendor wiki speaks of a 6-byte status (power, temperature, vanes,
+airflow); the 6th byte is not used by the scripts above.
 
 ## Notes
 

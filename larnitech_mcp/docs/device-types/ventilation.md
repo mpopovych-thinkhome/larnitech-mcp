@@ -1,6 +1,6 @@
 <a id="ventilation"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#ventilation) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#ventilation) — keep those in sync.
 
 `type="virtual" sub-type="ventilation"` — see also [virtual.md](virtual.md)
 for the other `virtual` sub-types.

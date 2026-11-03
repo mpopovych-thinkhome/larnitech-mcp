@@ -1,6 +1,6 @@
 <a id="ir-receiver"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#ir-receiver) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#ir-receiver) — keep those in sync.
 
 ## XML attributes
 

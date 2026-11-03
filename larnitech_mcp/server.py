@@ -1,9 +1,8 @@
 """MCP server exposing Larnitech controllers to an agent.
 
-Reading is open. Writing is opt-in twice over: an object needs `allow_write`
-(set from the CLI, never from a tool), and every write goes through
-`set_device` -> `confirm_set`, so nothing reaches a controller on a single
-tool call.
+Reading is open. Writing needs `allow_write` on the object, which only the
+CLI can set — never a tool. Every write is validated first and rejected
+outright if malformed or out of range, then verified after it lands.
 
 Per-device-type status keys, value formats, and quirks are served on demand
 through `get_docs`, not dumped into every response — call it once with no
@@ -13,7 +12,6 @@ needed.
 from __future__ import annotations
 
 import asyncio
-import secrets
 import time
 from collections import Counter
 
@@ -22,7 +20,7 @@ from mcp.server import MCPServer
 from mcp.server.runner import serve_loop
 from mcp.server.stdio import stdio_server
 
-from . import config, docs, report, snapshots, validate, watch
+from . import config, docs, modbus, report, snapshots, validate, watch
 from .client import LarnitechError, Session, build_url, request_once
 
 # A write is not settled when the first push arrives: several types make the
@@ -35,10 +33,6 @@ _SETTLE_QUIET = 1.0
 _SETTLE_MAX = 6.0
 
 mcp = MCPServer("larnitech")
-
-# set_device parks a validated write here; confirm_set is the only consumer.
-_PENDING: dict[str, dict] = {}
-_TOKEN_TTL = 300
 
 
 def _load(object_name: str) -> tuple[dict, str]:
@@ -528,11 +522,11 @@ async def set_device(
     status: dict | None = None,
     steps: list[dict] | None = None,
 ) -> dict:
-    """Validate a write and return a preview plus a confirmation token.
+    """Validate a write, perform it, and report what actually landed.
 
-    **This never touches the controller.** It reads the device's current
-    state, checks the payload, and returns what would change. Nothing
-    happens until `confirm_set(token)`.
+    The payload is checked first — keys, value ranges, vocabulary, the
+    type's known silent-failure traps — and **rejected without touching the
+    controller** if anything is wrong; `errors` says what and how to fix it.
 
     Pass `status` for a single write, or `steps` for a sequence:
 
@@ -542,12 +536,14 @@ async def set_device(
     Sequences exist because several types cannot be driven with one frame:
     the controller re-evaluates the channel after certain keys and overrides
     whatever else arrived too soon behind them (`fancoil` mode+state,
-    `vent` state+fan, clearing an `automation` then switching off). The
-    per-type rules live in the docs — `quirks` in the response repeats that
-    type's known issues so you can see them without a second call.
+    `vent` state+fan, clearing an `automation` then switching off).
 
-    Show the user the preview, especially `warnings` and `quirks`, and get
-    their agreement before confirming.
+    A `status-set` ack only means the command was accepted, not that it took
+    effect — some types ack a write they then ignore. So the write is
+    followed until the device goes **quiet** (no pushed event for ~1s), then
+    the final status is read back. `mismatched` lists requested keys that did
+    not take; `unrequested_changes` lists keys the controller moved on its
+    own — the fingerprint of a type needing a different step sequence.
     """
     obj, key = _load(object_name)
     if not obj.get("allow_write"):
@@ -571,8 +567,8 @@ async def set_device(
         device = await _device_record(obj, key, object_name, addr)
         if device is None:
             return {"ok": False, "error": f"no device at {addr} on {object_name!r}"}
-        # The record can be up to a minute old; the status it previews must
-        # not be, so read that fresh by address.
+        # The record can be up to a minute old; the status the write is
+        # checked against must not be, so read that fresh by address.
         answer = await request_once(
             obj, key, {"request": "status-get", "addr": addr, "status": "detailed"}
         )
@@ -586,29 +582,17 @@ async def set_device(
 
     errors: list[str] = []
     warnings: list[str] = []
-    preview: list[dict] = []
-    running = dict(current)
     single = len(plan) == 1
     for i, step in enumerate(plan, 1):
         step_errors, step_warnings = validate.check(device, step["status"])
         label = "" if single else f"step {i}: "
         errors += [label + e for e in step_errors]
         warnings += [label + w for w in step_warnings]
-        preview.append({
-            "step": i,
-            "status": step["status"],
-            "delay_after": step["delay_after"],
-            "changes": {
-                k: {"from": running.get(k), "to": v}
-                for k, v in step["status"].items()
-            } if isinstance(step["status"], dict) else step["status"],
-        })
-        if isinstance(step["status"], dict):
-            running.update(step["status"])
 
     result = {
+        "object": object_name,
+        "addr": addr,
         "device": _row(device, include_status=False),
-        "current_status": current,
         "warnings": warnings,
         "quirks": docs.quirks(dtype) or "none recorded for this type",
     }
@@ -616,56 +600,7 @@ async def set_device(
     if note:
         result["status_note"] = note
     if errors:
-        return {"ok": False, "errors": errors, **result}
-
-    token = secrets.token_hex(6)
-    _PENDING[token] = {
-        "object_name": object_name,
-        "addr": addr,
-        "plan": plan,
-        "before": dict(current),
-        "expires": time.time() + _TOKEN_TTL,
-    }
-    result.update({
-        "ok": True,
-        "token": token,
-        "expires_in": _TOKEN_TTL,
-        "preview": preview[0]["changes"] if single else preview,
-        "steps": len(plan),
-        "next": f'confirm with the user, then confirm_set("{token}")',
-    })
-    return result
-
-
-@mcp.tool()
-async def confirm_set(token: str) -> dict:
-    """Execute a write prepared by `set_device`, then confirm it settled.
-
-    Only call this after the user has agreed to the preview. The token is
-    single-use and expires; a stale one means preparing the write again.
-
-    A `status-set` ack only means the command was accepted, not that it took
-    effect — some types ack a write they then ignore. So this subscribes
-    first, runs the steps with their pauses, and then waits for the device
-    to go **quiet** (no new pushed event for ~1s) before reading the
-    authoritative final status. Waiting for silence rather than for the
-    first event is what catches the controller changing something back on
-    its own a fraction of a second later.
-
-    `unrequested_changes` reports keys the controller moved that you did not
-    ask for — that is the fingerprint of a type needing a different step
-    sequence.
-    """
-    pending = _PENDING.pop(token, None)
-    if pending is None:
-        return {"ok": False, "error": "unknown or already-used token — call set_device again"}
-    if time.time() > pending["expires"]:
-        return {"ok": False, "error": f"token expired after {_TOKEN_TTL}s — call set_device again"}
-
-    object_name, addr, plan = pending["object_name"], pending["addr"], pending["plan"]
-    obj, key = _load(object_name)
-    if not obj.get("allow_write"):  # re-check: it can be revoked between the two calls
-        return {"ok": False, "error": f"writes are disabled for {object_name!r}"}
+        return {"ok": False, "errors": errors, "current_status": current, **result}
 
     observed: dict = {}
     acks: list[bool] = []
@@ -696,44 +631,179 @@ async def confirm_set(token: str) -> dict:
             verify = await session.request(
                 {"request": "status-get", "addr": addr, "status": "detailed"}
             )
-            device = _find_device(verify.get("devices", []), addr)
-            if device and isinstance(device.get("status"), dict):
-                after = device["status"]
+            settled = _find_device(verify.get("devices", []), addr)
+            if settled and isinstance(settled.get("status"), dict):
+                after = settled["status"]
     except LarnitechError as err:
-        return {"ok": False, "error": config.mask(str(err), object_name)}
+        return {"ok": False, "error": config.mask(str(err), object_name), **result}
 
     requested: dict = {}
     for step in plan:
         if isinstance(step["status"], dict):
             requested.update(step["status"])
 
-    before = pending["before"]
-    applied = {k: after.get(k) for k in requested} if after else {}
     mismatched = [k for k, v in requested.items() if after and after.get(k) != v]
     unrequested = {
-        k: {"from": before.get(k), "to": v}
+        k: {"from": current.get(k), "to": v}
         for k, v in observed.items()
-        if k not in requested and before.get(k) != v
+        if k not in requested and current.get(k) != v
     }
-
-    return {
+    result.update({
         "ok": all(acks) and not mismatched,
-        "object": object_name,
-        "addr": addr,
         "steps_run": len(plan),
         "acknowledged": all(acks),
         "requested": requested,
-        "before": {k: before.get(k) for k in requested},
-        "after": applied,
+        "before": {k: current.get(k) for k in requested},
+        "after": {k: after.get(k) for k in requested} if after else {},
         "mismatched": mismatched,
         "events_observed": events,
         "unrequested_changes": unrequested,
-        "note": (
+    })
+    if mismatched:
+        result["note"] = (
             "mismatched keys were acknowledged but did not take the requested value — "
             "check this type's quirks for a required step sequence"
-            if mismatched else None
-        ),
-    }
+        )
+    return result
+
+
+# --- modbus --------------------------------------------------------------
+
+# A Modbus device answers almost at once (~0.2s measured on object 190).
+_MODBUS_TIMEOUT = 2.0
+# How many separator reads to try before sending anyway — see modbus_request.
+_MODBUS_SEPARATE_ATTEMPTS = 3
+# One exchange per controller at a time: an answer is told apart only by
+# slave/function/size, so two of ours in flight could take each other's.
+_modbus_locks: dict[str, asyncio.Lock] = {}
+
+
+async def _modbus_send(session, port: str, request: bytes, last: dict) -> list[int]:
+    """Send one frame, return its decoded answer from the port's events.
+
+    `send`, not `request`: an answer event can arrive before the
+    `status-set` response, and `request` would discard it while waiting.
+    """
+    await session.send(
+        {"request": "status-set", "addr": port, "status": "0x" + request.hex().upper()}
+    )
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _MODBUS_TIMEOUT
+    while (remaining := deadline - loop.time()) > 0:
+        event = await session.recv_event(timeout=remaining)
+        if event is None:
+            break
+        if event.get("event") != "statuses":
+            continue
+        device = _find_device(event.get("devices") or [], port)
+        status = device.get("status") if device else None
+        received = modbus.frame(status.get("hex")) if isinstance(status, dict) else None
+        if received is None:
+            continue
+        last["frame"] = received
+        answer = modbus.parse_answer(request, received)  # raises on a Modbus exception
+        if answer is not None:
+            return answer
+    raise TimeoutError
+
+
+@mcp.tool()
+async def modbus_request(
+    object_name: str,
+    port: str,
+    slave: int,
+    function: int,
+    address: int,
+    count: int = 1,
+    values: list[int] | None = None,
+) -> dict:
+    """One Modbus RTU exchange on a `com-port` — Modbus TCP ports take the same frame.
+
+    `port` is the com-port's `addr` (e.g. `210:1`). `function`: 3 read holding
+    registers, 4 read input registers (both with `count`), 6 write one register
+    (`values=[v]`), 16 write several (`values=[...]`). `address` is the 0-based
+    register number as sent on the wire. Reads return `registers`; writes
+    return once the device confirms.
+
+    Reads work on any object; writes need `allow_write`, like `set_device`.
+
+    **The port may be in use by the controller's own scripts, so other
+    requests can be on the bus at the same time — and the answer returned may
+    be the answer to someone else's request, not to yours.** One request is
+    the default. When the value really matters, send the same request twice
+    about 1s apart and trust it only if both answers agree.
+
+    A device that does not answer within 2s is reported as a timeout, never
+    as its last known value.
+    """
+    obj, key = _load(object_name)
+    errors = []
+    if not 1 <= slave <= 247:
+        errors.append(f"slave is 1-247, got {slave}")
+    if function not in modbus.READ_FUNCTIONS + modbus.WRITE_FUNCTIONS:
+        errors.append(f"function is 3, 4 (read), 6 or 16 (write), got {function}")
+    if not 0 <= address <= 0xFFFF:
+        errors.append(f"address is 0-65535, got {address}")
+    if function in modbus.READ_FUNCTIONS and not 1 <= count <= 125:
+        errors.append(f"count is 1-125, got {count}")
+    if function in modbus.WRITE_FUNCTIONS:
+        if not values or (function == 6 and len(values) != 1) or len(values) > 123:
+            errors.append("function 6 takes exactly one value, 16 takes 1-123 values")
+        elif any(not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 0xFFFF for v in values):
+            errors.append(f"values are 16-bit registers, 0-65535, got {values}")
+        elif not obj.get("allow_write"):
+            return {
+                "ok": False,
+                "error": f"writes are disabled for {object_name!r}",
+                "fix": f'run in a terminal: python -m larnitech_mcp allow-write "{object_name}" on',
+            }
+    errors += validate.check_addr(port)
+    if errors:
+        return {"ok": False, "errors": errors}
+
+    try:
+        device = await _device_record(obj, key, object_name, port)
+    except LarnitechError as err:
+        return {"ok": False, "error": config.mask(str(err), object_name)}
+    if device is None or (device.get("type") or "").lower() != "com-port":
+        return {"ok": False, "error": f"{port} on {object_name!r} is not a com-port"}
+
+    request = modbus.build_request(slave, function, address, count, values)
+    sent = "0x" + request.hex().upper()
+    lock = _modbus_locks.setdefault(object_name, asyncio.Lock())
+    try:
+        async with lock, Session(obj, key) as session:
+            await session.request({"request": "status-subscribe", "addr": port, "status": "detailed"})
+            current = await session.request({"request": "status-get", "addr": port, "status": "detailed"})
+            port_status = (_find_device(current.get("devices") or [], port) or {}).get("status")
+            last = {"frame": modbus.frame(port_status.get("hex")) if isinstance(port_status, dict) else None}
+            # The controller reports only a CHANGE of the port's last received
+            # frame, so an answer identical to the one already there arrives as
+            # no event at all. Taking the stored frame instead would pass off a
+            # device gone silent as a fresh answer — so first move the port off
+            # anything that reads as our answer, with a read of a different size.
+            for _ in range(_MODBUS_SEPARATE_ATTEMPTS):
+                if not modbus.looks_like_answer(request, last["frame"]):
+                    break
+                try:
+                    await _modbus_send(session, port, modbus.separator(request), last)
+                except (TimeoutError, modbus.ModbusExceptionResponse):
+                    pass  # the frame moved, or the request below times out honestly
+            registers = await _modbus_send(session, port, request, last)
+    except TimeoutError:
+        return {"ok": False, "sent": sent, "error": f"no answer on {port} within {_MODBUS_TIMEOUT:g}s"}
+    except modbus.ModbusExceptionResponse as err:
+        return {"ok": False, "sent": sent, "error": f"device answered with Modbus exception code {err.code}"}
+    except LarnitechError as err:
+        return {"ok": False, "sent": sent, "error": config.mask(str(err), object_name)}
+
+    result = {"ok": True, "object": object_name, "port": port, "slave": slave,
+              "function": function, "address": address, "sent": sent}
+    if function in modbus.READ_FUNCTIONS:
+        result["registers"] = registers
+    else:
+        result["written"] = values
+    return result
 
 
 # --- reporting -----------------------------------------------------------

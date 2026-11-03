@@ -181,6 +181,9 @@ and `modes` for climate devices.
   object gives `[{"addr":...,"success":true}]`; hex gives `["999:250"]`
   (bare addr, no `success`). **Use object form** — it has a checkable ack.
 - The change is sent as one command for one `addr`, not a list.
+- **Raw Modbus to a `com-port`:** only the legacy string form reaches the bus
+  (`"status": "0x01060001002399D3"`, CRC included); `{"hex": …}` is ignored —
+  see [com-port](device-types/com-port.md).
 - Which keys apply depends on type (`state` / `level` / `setpoint-heat` /
   etc.) — see [device-types/](device-types/_device_types.md).
 

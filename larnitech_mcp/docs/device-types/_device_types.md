@@ -1,9 +1,12 @@
-Extended index of every documented device type — what exists and roughly
-how, never the full detail. Every detail lives in the linked `<type>.md`
-file; this file must stay consistent with them (same keys, same enum
-values, same byte numbers). If they disagree and it's unclear which side is
-current, ask the user rather than guessing — see the sync rule in
-[the README](https://github.com/mpopovych-thinkhome/larnitech-mcp#readme).
+Index of every documented device type: the API2 status keys and the known
+issues of each, nothing more. XML attributes, script byte layouts and notes
+live only in the linked `<type>.md` — open it before writing XML or a script.
+Status keys and issue titles here must match the type file; if they disagree
+and it's unclear which side is current, ask the user rather than guessing.
+
+The Larnitech MCP serves this file as the `get_docs()` overview and reads
+each type's `**Issues**` block into every write preview — keep the
+`### <type>` headings and the `**Issues**` / `- Bugs` / `- Quirks` layout.
 
 A status of `{"state": "undefined"}` on any type usually means the device
 is physically offline — see
@@ -47,7 +50,7 @@ can decide whether to open the type file.
 | [ir-receiver](ir-receiver.md#ir-receiver)                         | IR receiver, one-shot capture                              | —        |
 | [remote-control](remote-control.md#remote-control)                | RF remote learning widget, little confirmed                | quirk    |
 | [script](script.md#script)                                        | An Imerel script instance as a device                      | quirk    |
-| [com-port](com-port.md#com-port)                                  | RS232/serial port reference, no status                     | —        |
+| [com-port](com-port.md#com-port)                                  | RS232/serial port reference, status `hex` = last frame received | quirk |
 | [gate](gate.md#gate)                                              | Gate/door, digest oversimplifies to on/off                 | conflict |
 | [jalousie](jalousie.md#jalousie)                                  | Motorized blind/shutter, same open/close model as `gate`   | quirk    |
 | [speaker](speaker.md#speaker)                                     | Media point — streams, volume, transport commands          | 1 bug    |
@@ -76,33 +79,6 @@ can decide whether to open the type file.
   - `high`
 - device-level masks `modes`/`vane-ver`/`vane-hor`: hex string, live — re-read every poll (`get-devices`)
 
-**XML**
-- `modes`: bitmask 5b, default `0x1F`
-  - 0b — fan
-  - 1b — cool
-  - 2b — dry
-  - 3b — heat
-  - 4b — auto
-- `fans`: bitmask 5b, default `0x1F` — auto, 1-5, silent
-- `vane-ver`: bitmask 7b, default `0x7E`
-- `vane-hor`: bitmask 8b, default `0x00`
-- `t-min`/`t-delta`/`t-step`: int, default 16/16/1
-
-**Script**
-- Read: 9 bytes
-  - 0 — status
-    - 0b — on/off
-    - 4-7b — mode as a number: 0 fan, 1 cool, 2 dry, 3 heat, 4 auto
-  - 1 — fan speed
-  - 2 — setpoint °C, int
-  - 5 — current temp fraction `(t%10)*250/10`
-  - 6 — current temp int `t/10`
-  - 8 — alarm 0/1
-- Write: `setStatus(WGT_AC, {...}, 9)`, same layout
-
-**Note**
-Universal climate widget, used by most HVAC scripts. API and script encodings are independent — no 1:1 mapping.
-
 **Issues**
 - Bugs
   - `fans` mask never returned — [BUG-001](../bugs.md#bug-001)
@@ -113,6 +89,7 @@ Universal climate widget, used by most HVAC scripts. API and script encodings ar
   - vane-* is both a device mask and a status position
   - full status key set confirmed live
   - `fan` accepts only 4 fixed strings
+  - script fan speed is byte 4, not byte 1
   - masks are live, must not be cached
 
 ---
@@ -123,22 +100,10 @@ Universal climate widget, used by most HVAC scripts. API and script encodings ar
 - `modes`: reads as `0x1F` always, ignore the value — see bugs
 - `funs`: never returned — see bugs
 
-**XML**
-- `modes`: bitmask 5b, default `0x1F` (same bit layout as `ac`)
-- `funs`: bitmask, default `0x0F` — **named `funs` not `fans`**
-- `vane-ver`/`vane-hor`: bitmask, default `0x7F` each
-- `IRT`/`CONDID`/`IRID`: IR/identifier addresses
-
-**Script**
-- Read: 6 bytes — power, temperature, vane positions, airflow capacity (byte split unconfirmed live)
-- Mode byte bits 4-7: same numbering as `ac`
-
-**Note**
-Distinct API2 type from `ac`, shares XML shape and masking bugs.
-
 **Issues**
 - Quirks — details in [conditioner.md](conditioner.md)
   - status key set confirmed; BUG-001/BUG-002 reproduced
+  - script status byte 1 = setpoint °C − 16 (not plain °C as in `AC`)
 - Bugs
   - `funs` mask never returned — [BUG-001](../bugs.md#bug-001)
   - `modes` returned as if unset — [BUG-002](../bugs.md#bug-002)
@@ -154,15 +119,7 @@ Distinct API2 type from `ac`, shares XML shape and masking bugs.
 - `current-humidity`: float %
 - `pid-temperature`: heat demand 0-100%
 - `mode`: string, `heat`/`cool`/`auto` (smaller lexicon than AC/fancoil's `mode`)
-
-**XML**
-- no dedicated vendor page found — not documented
-
-**Script**
-- not documented
-
-**Note**
-Generic HVAC/climate zone type; relationship to `valve-heating`/`fancoil` unclear.
+- `setpoint-warm-floor`/`current-warm-floor`/`pid-warm-floor`: same three for a zone with `warm-floor-sensors`
 
 **Issues**
 - Bugs
@@ -184,17 +141,6 @@ Generic HVAC/climate zone type; relationship to `valve-heating`/`fancoil` unclea
 - `level`: int, 0-100 percent
 - `color-temp`: int, 0-100 percent
 
-**XML**
-- `color-temp`/`color-white`: linked dimmer addr, `"ID:SUBID"`
-- `auto-period`: int seconds, `system`: yes/no
-
-**Script**
-- Read: 2 bytes — byte0 status bits (0 on/off, 3 automation, 7 alarm), byte1 brightness 0-250
-- Write: 1 byte (on/off/toggle) or 3 bytes (state, brightness, transition seconds)
-
-**Note**
-API `level` (0-100%) and script brightness byte (0-250) are different scales for the same value.
-
 **Issues**
 - none recorded
 
@@ -206,16 +152,6 @@ API `level` (0-100%) and script brightness byte (0-250) are different scales for
 - `level`/`saturation`/`hue`: int, all 0-100 percent
   - `hue` needs ×3.6 on read / ÷3.6 on write to become degrees
 
-**XML**
-- same shape as `dimmer-lamp`: `color-temp`, `color-white`, `auto-period`, `system`
-
-**Script**
-- Read: 4 bytes — byte0 status bits, byte1 V(brightness), byte2 S(saturation), byte3 H(hue), all 0-250
-- Write: 1/4/5 bytes (5th = transition time ×0.1s)
-
-**Note**
-Three independent 0-100% API scales map to three 0-250 script byte scales; `hue` additionally needs the degree conversion.
-
 **Issues**
 - none recorded
 
@@ -226,15 +162,6 @@ Three independent 0-100% API scales map to three 0-250 script byte scales; `hue`
 **API**
 - `state`: on/off
 - `auto-state`: bool (plain sub-type only)
-
-**XML**
-- `sub-type`: enum — `damper`, `air-fan`, `socket`, `lock`, `dehumidifier`, `closing-switch`, `valve-3`, `pump`
-
-**Script**
-- Read/write: 1 byte — bit0 power, bit3 automation, bit7 alarm
-
-**Note**
-`sub-type` changes semantics, not just the icon.
 
 **Issues**
 - Quirks — details in [lamp.md](lamp.md)
@@ -250,16 +177,6 @@ Three independent 0-100% API scales map to three 0-250 script byte scales; `hue`
   - byte0 (`BB`) — key state: `0xFC` pressed, `0xFD` held/repeat, `0xFF` released
   - byte1 (`CC`) — hold-duration counter, 128ms ticks, resets to 0 on release
 
-**XML**
-- `type`/`addr`/`name` only, no further attributes documented
-
-**Script**
-- Read: 2 bytes — byte0 key state (`0xFF` released/`0xFD` held/`0xFC` pressed), byte1 hold duration ×128ms
-- LED status: separate config, values 0-31, standard/inverted color modes
-
-**Note**
-Confirmed live 2026-08-20: `switch` is a physical wall-panel button/key input, not a relay output — vendor page was right, the earlier digest's on/off relay framing was wrong. Conflict resolved.
-
 **Issues**
 - Quirks — details in [switch.md](switch.md)
   - resolved: confirmed live to be a button/key input, `hex`-only status, no `state`
@@ -271,16 +188,6 @@ Confirmed live 2026-08-20: `switch` is a physical wall-panel button/key input, n
 
 **API**
 - `state`: string enum, `opened`/`closed` — write direction unconfirmed
-
-**XML**
-- `leak-sensors`: list, `;`-separated addresses
-- optional `<linked addr="..."/>` control button
-
-**Script**
-- Read/write: 1 byte per vendor page — `0` off (water flowing), `1` on (water stopped)
-
-**Note**
-Vendor byte semantics (0/1 on/off) vs. live API string (`opened`/`closed`) — mapping direction not confirmed.
 
 **Issues**
 - Quirks — details in [valve.md](valve.md)
@@ -294,22 +201,6 @@ Vendor byte semantics (0/1 on/off) vs. live API string (`opened`/`closed`) — m
 **API**
 - `state`/`automation`/`target`: automation absent = manual, name = preset, `"always-off"` = reserved lockout
 - `target` resets to `-128` if set without `state`/`mode` together — always include `target`
-
-**XML**
-- `sub-type`: `warm-floor` (no observed behavior difference)
-- `undefined-behavior`: `on`/`off`/`last`, default `last`
-- `t-min`/`t-max`: default 0/32
-- `<automation>` children: `name`, `temperature-level`, optional schedule
-- `<protect>` children: overheat cutout off the floor probe (`type="above"`, `status="off"`, `treshold` 30/32/35) — the default for a `warm-floor` circuit, overrides the loop instead of bounding it — separate notes on `<protect>` lockouts
-
-**Script**
-- Event (1 byte): bit0 on/off, bits4-7 automation mode number
-- Status request (6 bytes): status, setpoint (2b), avg temp (2b), mode indicator (`254`=always-off, `255`=manual)
-- Write: 1 byte — on/off only, does **not** set automation mode
-- Setting automation mode/preset: separate server pseudo-device `setStatus(1000:100/101/102, "ID:SID\0as:<N>"/"...\0<PresetName>")` — see [valve-heating.md](valve-heating.md#setting-automation-mode-by-indexname-from-script)
-
-**Note**
-Always has 2 reserved modes (manual, always-off) beyond any named presets.
 
 **Issues**
 - Bugs
@@ -329,20 +220,6 @@ Always has 2 reserved modes (manual, always-off) beyond any named presets.
 - `fan`: always float 0-100%, even on stepped hardware
 - `valve-heating`/`valve-cooling` XML attrs not visible via API2 in either direction
 
-**XML**
-- `mode`: `heat`/`cool`, default `heat`
-- `alg`: `eco`/`fast`/`boost`
-- `valve-heating`/`valve-cooling`: addr references
-
-**Script**
-- Read: 7 bytes — setpoint/current (16-bit each), automation index, fan level 0-250, 8 error flags
-- Write: 1 byte or 2 bytes (status + power 0-250) — neither sets automation mode
-- Setting automation mode/preset: same `1000:100/101/102` mechanism as `valve-heating`, including `as:-4` for manual — confirmed live for this type too, see [fancoil.md](fancoil.md#script)
-- Setting setpoint via script: `setStatus(1000:102, "ID:SID\0ts:<N>")` — confirmed live, works even in Manual mode (unlike the API2 `target` write, which is silently ignored there)
-
-**Note**
-Shares its automation-mode model wholesale with `valve-heating`.
-
 **Issues**
 - Bugs
   - automation-preset switch leaves previous preset's outputs on — [BUG-010](../bugs.md#bug-010)
@@ -360,16 +237,6 @@ Shares its automation-mode model wholesale with `valve-heating`.
 **API**
 - Status: `{"state", "target", "fan"}` — `fan` is a **string preset** (e.g. `"auto"`)
 
-**XML**
-- `type="virtual" sub-type="ventilation"`, `funs` bitmask default `0xFF`, `length` default 6
-- `temperature-sensors`: gates whether `target`/`current` appear in status at all
-
-**Script**
-- Read: 6 bytes — byte0 power bit0, byte1 temp (value+16 offset, bits0-3), byte4 airflow capacity bits0-3
-
-**Note**
-Not the same as `vent` below — same-sounding name, `fan` is a string here vs. a number there.
-
 **Issues**
 - Quirks — details in [ventilation.md](ventilation.md)
   - target/current only appear in status once temperature-sensors is set in XML
@@ -380,16 +247,6 @@ Not the same as `vent` below — same-sounding name, `fan` is a string here vs. 
 
 **API**
 - Status: `{"state", "fan"}` — `fan` is a **number**, 0-100
-
-**XML**
-- `co2-sensors`, `undefined-behavior`, `P0`, `limit-fan`, `ctrl-change1/2`, `ctrl-ticks`, `alg`
-
-**Script**
-- Byte 6: current fan level 0-250
-- Write: 1 byte (on/off/toggle) or 2 bytes (state + power)
-
-**Note**
-Not the same as `ventilation` above — `fan` is a number here vs. a string preset there.
 
 **Issues**
 - Quirks — details in [vent.md](vent.md)
@@ -408,18 +265,6 @@ Not the same as `ventilation` above — `fan` is a number here vs. a string pres
 - `plan`: `{"state": "undefined"}` — floorplan image reference, not interactive
 - `lamp`/`dimer-lamp`/`rgb-lamp`: same shape as standalone counterparts, but observed live emitting out-of-range values (0-100 fields all `101.6`) on this session's only example — reliability unconfirmed
 
-**XML**
-- `sub-type`: `sensor`, `text`, `long-text`, `lamp`, `dimer-lamp`, `rgb-lamp`, `jalousie`, `gate`, `gate120`, `jalousie120`, `prf`, `sunrise`, `plan`, `ventilation`
-- `length`: 0 for text types, byte count otherwise
-- `dim`: unit symbol suffix
-
-**Script**
-- `sensor`: `setStatus(WGT_SENSOR, {0, value})`
-- `long-text`: separate module ID, `sprintf` with `%c`+10 for newlines
-
-**Note**
-Broadest catch-all type — always check `sub-type` before assuming behavior. `ventilation` sub-type has its own file. Full per-sub-type API confirmed live 2026-08-20/21 — see [virtual.md](virtual.md).
-
 **Issues**
 - Quirks — details in [virtual.md](virtual.md)
   - `jalousie`/`gate` (+120) sub-types: hex-only, distinct undocumented wire format vs. their standalone counterparts
@@ -435,15 +280,6 @@ Broadest catch-all type — always check `sub-type` before assuming behavior. `v
 - `btunreg`: raw/empty diagnostic aggregate, no stable schema, e.g. `{"CAN810": {"0": {}, "1": {}}}`
 - `MBUS`: self-describing meter data — numeric-string keys → values, plus `descr` (per-key metadata: `typ`/`dim`/`func`/`stor`) and `hr` (model/serial string)
 
-**XML**
-- not yet pulled from the vendor wiki
-
-**Script**
-- not documented
-
-**Note**
-`MBUS` numeric key is the only stable field identifier — `typ` names repeat across keys on the same device. An unanswered meter returns every field (including `descr`/`hr`) as `null` for that poll cycle — not an error, not zero.
-
 **Issues**
 - Quirks — details in [json.md](json.md)
   - `MBUS`: fully-`null` payload means "no data this cycle", must not be treated as error or zero
@@ -458,16 +294,6 @@ Broadest catch-all type — always check `sub-type` before assuming behavior. `v
 - `state`: on/off, identical shape across all `ls-type` values
 - `ls-type` itself does not come through the API at all — XML-only
 
-**XML**
-- `<contains>` children: `addr`, `state`, `state-rev` (for `ls-type=3`)
-- `<automation>` children: `door-sensors`, `enabled`, `illumination-level`, `time-interval`, `type`
-
-**Script**
-- not documented at byte level — behavior is controller-internal
-
-**Note**
-`ls-type` meanings (0=impulse, 1=impulse+feedback, 2=activation-only, 3=impulse+separate on/off status, 4=master-slave passthrough) come entirely from live testing — vendor page doesn't document them.
-
 **Issues**
 - Quirks — details in [light-scheme.md](light-scheme.md)
   - no status-change event when a slave changes state, only on a direct widget press, ls-type 0/3 (BUG-007)
@@ -479,20 +305,9 @@ Broadest catch-all type — always check `sub-type` before assuming behavior. `v
 **API**
 - `state`: float °C
 
-**XML**
-- `scale`: `auto` or `MIN:MAX`
-- `log-levels`: default `60,80,90`
-- `value-min`/`value-max`: default 16/32
-
-**Script**
-- Read: 2 bytes — byte0 fraction `(v%10)*256/10`, byte1 integer `v/10`
-- Decode back: `value = byte1*10 + byte0*10/255` (not `/26` — under-reads)
-
-**Note**
-Fractional encoding (×256/10) differs from `ac` (×250/10) — don't mix them up.
-
 **Issues**
-- none recorded
+- Quirks — details in [temperature-sensor.md](temperature-sensor.md)
+  - negative values: whole part rounded down in the script encoding
 
 ---
 
@@ -500,15 +315,6 @@ Fractional encoding (×256/10) differs from `ac` (×250/10) — don't mix them u
 
 **API**
 - `current-humidity`: float %, read-only
-
-**XML**
-- `scale`, `value-min`/`value-max`: default 0/100
-
-**Script**
-- Read: 2 bytes — byte0 fraction, byte1 integer
-
-**Note**
-Read-only, same 2-byte shape as other continuous sensors.
 
 **Issues**
 - none recorded
@@ -520,16 +326,6 @@ Read-only, same 2-byte shape as other continuous sensors.
 **API**
 - `state`: int ppm, read-only
 
-**XML**
-- `warning-level`/`emergency-level`: default 1500/2000
-- `value-min`/`value-max`: default 0/5000
-
-**Script**
-- Read: 2 bytes, integer ppm
-
-**Note**
-Read-only, no write path documented. API status key confirmed live as `state`, not `current-co2`.
-
 **Issues**
 - none recorded
 
@@ -539,15 +335,6 @@ Read-only, no write path documented. API status key confirmed live as `state`, n
 
 **API**
 - `state`: numeric light level, read-only
-
-**XML**
-- `scale`, `value-min`/`value-max`: default 0/100
-
-**Script**
-- Read: 2 bytes — byte0 fraction, byte1 integer
-
-**Note**
-Read-only, continuous range only.
 
 **Issues**
 - none recorded
@@ -559,16 +346,6 @@ Read-only, continuous range only.
 **API**
 - `state`: documented as key field — see conflict below
 
-**XML**
-- `scale`: `"0:100"` or `auto`
-- `value-min`/`value-max`: default 0/100
-
-**Script**
-- Read: 2 bytes — byte0 fraction, byte1 integer (continuous-range encoding, no boolean)
-
-**Note**
-Vendor page uses the generic continuous-sensor template; no discrete "motion detected" value is documented.
-
 **Issues**
 - Quirks — details in [motion-sensor.md](motion-sensor.md)
   - resolved: `state` is a continuous level, not a boolean — confirmed live
@@ -579,17 +356,6 @@ Vendor page uses the generic continuous-sensor template; no discrete "motion det
 
 **API**
 - status key shape unconfirmed this session
-
-**XML**
-- always has a `sub-type` attribute that sets real semantics — not a plain contact by default assumption
-- sub-types confirmed to exist: `contact`, `motion`, `fire`, `smoke`, `gas`, `co2`, `leak`, `glass`, `lock`, `alarm`
-- absent `sub-type` = plain contact semantics
-
-**Script**
-- not documented
-
-**Note**
-Only `contact` was confirmed live to report "on" (open) at the value level; the rest were confirmed only in XML dispatch, not their triggered value.
 
 **Issues**
 - Quirks — details in [door-sensor.md](door-sensor.md)
@@ -603,15 +369,6 @@ Only `contact` was confirmed live to report "on" (open) at the value level; the 
 - normal (non-fault) status shape unconfirmed this session
 - can report a fault via `{"malfunction": <code>}` **instead of** normal state — confirmed live on a real device
 
-**XML**
-- not yet pulled from the vendor wiki
-
-**Script**
-- not documented
-
-**Note**
-`malfunction` is a companion "sensor itself is broken" signal, separate from "leak detected".
-
 **Issues**
 - Quirks — details in [leak-sensor.md](leak-sensor.md)
   - `malfunction` key confirmed live; normal status shape still unconfirmed
@@ -623,15 +380,6 @@ Only `contact` was confirmed live to report "on" (open) at the value level; the 
 **API**
 - no status key documented
 
-**XML**
-- `type`/`addr`/`name` only — vendor page is a stub (last updated 2022)
-
-**Script**
-- "byte 0..N contains transmit packet" — no further breakdown given
-
-**Note**
-Minimal vendor documentation; nothing more until tested live.
-
 **Issues**
 - none recorded
 
@@ -642,17 +390,6 @@ Minimal vendor documentation; nothing more until tested live.
 **API**
 - no status key confirmed live
 
-**XML**
-- `type`/`addr`/`name` only
-
-**Script**
-- Write (1 byte): 0 disable capture, 1 enable single-message capture
-- Read (1 byte): 0 off, 1 on, other = message received
-- Not persistent — must re-write `1` for each capture
-
-**Note**
-One-shot capture, not a listening mode.
-
 **Issues**
 - none recorded
 
@@ -662,15 +399,6 @@ One-shot capture, not a listening mode.
 
 **API**
 - `state`: confirmed `"undefined"` on two devices with zero configured `<remote-signal>` children — populated-state and write-side (send-a-code) behavior unconfirmed
-
-**XML**
-- presumed `<remote-signal identifier=... transmitter-addr=... value=HEX.../>` children per vendor page, not re-verified this session
-
-**Script**
-- not documented
-
-**Note**
-Very little confirmed — only that `state` exists and reads `"undefined"` with nothing configured. Needs a real configured example to learn more.
 
 **Issues**
 - Quirks — details in [remote-control.md](remote-control.md)
@@ -685,17 +413,6 @@ Very little confirmed — only that `state` exists and reads `"undefined"` with 
 - `state`: on/off, writable
 - `auto-state`: bool, auto mode — same flag as `lamp`, undocumented for this type; omitted rather than nulled
 
-**XML**
-- `path` or `body` (one required), `name`, `addr`, custom `NAME` params
-- also seen live, not on the vendor page: `id`, `image`, `script-folder` (base64 of an XPath into the config)
-- none of the XML attributes reach API2
-
-**Script**
-- Status: `0x00` off, `0x01` on, `0xFF` toggle
-
-**Note**
-Represents an Imerel script instance as a device — see separate script-authoring notes for script-authoring patterns, different subject.
-
 **Issues**
 - Quirks — details in [script.md](script.md)
   - mutually exclusive script groups (house modes, seasons) are per-object configuration, not a property of the type
@@ -705,19 +422,11 @@ Represents an Imerel script instance as a device — see separate script-authori
 ### com-port
 
 **API**
-- no status key — not a device with readable status
-
-**XML**
-- `type`/`addr`/`name` only
-
-**Script**
-- not documented
-
-**Note**
-Mostly used as a `devices-list filter="com-port"` selector target in script settings, not a live device.
+- `hex` — last frame the controller received on the port (device answers, write echoes), hex string with CRC
 
 **Issues**
-- none recorded
+- `hex` shows only received frames; identical consecutive frames make one event
+- `hex` as an object (`{"hex": …}`, all MCP `set_device` can send) is ignored: `set_device` reports `acknowledged: false`, nothing goes to the bus; a raw frame goes out with API2 `status-set` and a string status (`"0x01060001002399D3"`, CRC by hand)
 
 ---
 
@@ -725,16 +434,6 @@ Mostly used as a `devices-list filter="com-port"` selector target in script sett
 
 **API**
 - digest simplifies to plain `state` — vendor page has a richer enum, see conflict below
-
-**XML**
-- `type`/`addr`/`name` only
-
-**Script**
-- Read (1 byte): 0 closed, 1 opened, 2 closing, 3 opening, 4 middle, 5 unknown
-- Write (1 byte): 0 close, 1 open, 2 close, 3 open, 4 stop, `0xFF` toggle
-
-**Note**
-6-state read model — richer than plain on/off.
 
 **Issues**
 - Quirks — details in [gate.md](gate.md)
@@ -749,15 +448,6 @@ Mostly used as a `devices-list filter="com-port"` selector target in script sett
 - `state`: four-state read — `opened`, `closed`, `opening`, `closing`
 - Write vocabulary is the verb form (`open`/`close`), distinct from the read/state form
 
-**XML**
-- not yet pulled from the vendor wiki
-
-**Script**
-- not yet documented
-
-**Note**
-Same open/close motorized behaviour as `gate`, confirmed on a separate live device.
-
 **Issues**
 - Quirks — details in [jalousie.md](jalousie.md)
   - write needs verb form open/close, not opened/closed — see gate.md
@@ -769,15 +459,6 @@ Same open/close motorized behaviour as `gate`, confirmed on a separate live devi
 **API**
 - `position`/`target`: numeric, 0-100 scale — **0 = fully open, 100 = fully closed** (inverted from the natural guess)
 - transient overshoot past 0/100 (e.g. `-2`/`102`) observed during motion — motor coast, not a bug
-
-**XML**
-- not yet pulled from the vendor wiki
-
-**Script**
-- not documented
-
-**Note**
-Distinct control model from `jalousie`/`gate` — those are state-only, verb-form open/close writes with no position; `blinds` is a genuine position/target device.
 
 **Issues**
 - Quirks — details in [blinds.md](blinds.md)
@@ -802,17 +483,6 @@ Distinct control model from `jalousie`/`gate` — those are state-only, verb-for
 - `priority`: int 0-250, an interruption stack that also gates whether a command runs at all
 - device-level `linked`: button bindings, one of the few config-time attributes that IS exposed
 
-**XML**
-- `hw`: space-separated options, seen `play-lim=0 ss=0` (not exposed via API)
-- `<linked addr=... click=... long-click=...>`: physical button bindings
-
-**Script**
-- Status byte array: 0 state (0 off, 1 playing, 2 error, 4 pause), 1 volume 0-250, 4 priority, 5 duration ms, 9 position ms, 17 url
-- Commands: `setStatus(addr, 0)` stop, `2` pause, `3` continue, `{4,vol}`, `{8,"url"}`, or the string form `{"v=120 s=1 url=..."}`
-
-**Note**
-API2 and script views disagree on nearly every representation — string vs numeric state, percent vs 0-250, seconds string vs milliseconds int.
-
 **Issues**
 - Bugs
   - invalid `state` write puts the widget in `error` — [BUG-009](../bugs.md#bug-009)
@@ -833,16 +503,6 @@ API2 and script views disagree on nearly every representation — string vs nume
 - `state`: number — **not a percent as-is**, observed 768, 256, 0 on an idle CPU
 - Read-only
 
-**XML**
-- `hw`: names the metric, seen `cpu-usage` (not exposed via API)
-- `system="yes"` on the observed device (not exposed — [BUG-006](../bugs.md#bug-006))
-
-**Script**
-- not documented
-
-**Note**
-Generic scalar readout used here for controller self-telemetry; the type describes display formatting, `hw` says what the value is.
-
 **Issues**
 - Quirks — details in [percent-sensor.md](percent-sensor.md)
   - value exceeds 100 and needs scaling; ÷256 fits the samples but is unconfirmed
@@ -854,16 +514,6 @@ Generic scalar readout used here for controller self-telemetry; the type describ
 **API**
 - `state`: number, observed 17/23/20/35 and moving — live telemetry
 - Read-only
-
-**XML**
-- `hw`: names the metric, seen `cpu-load` (not exposed via API)
-- `system="yes"` on the observed device
-
-**Script**
-- not documented
-
-**Note**
-Same family as `percent-sensor`; every observed value was an integer despite the type name.
 
 **Issues**
 - Quirks — details in [float-sensor.md](float-sensor.md)
@@ -877,16 +527,6 @@ Same family as `percent-sensor`; every observed value was an integer despite the
 - `state`: electrical current in **amperes**; only ever observed as `0`, so encoding unconfirmed
 - Read-only
 
-**XML**
-- no `hw` — the type names the quantity
-- `system="yes"` on the observed device
-
-**Script**
-- not documented
-
-**Note**
-Same family as `percent-sensor`/`float-sensor`, but names its quantity in the type rather than in `hw`.
-
 **Issues**
 - none recorded
 
@@ -897,15 +537,6 @@ Same family as `percent-sensor`/`float-sensor`, but names its quantity in the ty
 **API**
 - `state`: number — voltage; read 16-18 across four devices, unit and scaling unconfirmed
 - Read-only
-
-**XML**
-- plain item, seen with `area: "Setup"`
-
-**Script**
-- not documented
-
-**Note**
-Same family as `current-sensor`/`percent-sensor`/`float-sensor` — generic scalar readouts.
 
 **Issues**
 - none recorded
@@ -920,15 +551,6 @@ Same family as `current-sensor`/`percent-sensor`/`float-sensor` — generic scal
 - device-level `cameras`: address of its `rtsp` camera
 - device-level `linked`: bound button addresses
 
-**XML**
-- `door`, `cameras`, `linked` — and unusually these config-time links DO reach API2
-
-**Script**
-- not documented
-
-**Note**
-The system's own door station. Comes as a family on one module with `mic`, `security-card-reader` and `rtsp`.
-
 **Issues**
 - status never read from live hardware (only offline)
 
@@ -939,15 +561,6 @@ The system's own door station. Comes as a family on one module with `mic`, `secu
 **API**
 - `state`: only ever read as `"undefined"` — from an OFFLINE door station, so the live status is unknown
 - Read-only
-
-**XML**
-- plain item on the intercom's module
-
-**Script**
-- not documented
-
-**Note**
-Microphone of the `intercom`.
 
 **Issues**
 - status never read from live hardware (only offline)
@@ -960,15 +573,6 @@ Microphone of the `intercom`.
 - `state`: only ever read as `"undefined"` — from an OFFLINE door station, so the live status is unknown
 - Read-only
 
-**XML**
-- plain item on the intercom's module
-
-**Script**
-- not documented
-
-**Note**
-Card reader of the `intercom`.
-
 **Issues**
 - status never read from live hardware (only offline)
 
@@ -979,15 +583,6 @@ Card reader of the `intercom`.
 **API**
 - `state`: only ever read as `"undefined"` — from an OFFLINE camera, so the live status is unknown; the device record carries no stream URL or credentials
 - Read-only
-
-**XML**
-- a camera reference; an `intercom` points at one through its `cameras` attribute
-
-**Script**
-- not documented
-
-**Note**
-A camera added to the system — a reference to something configured elsewhere, not a source of video metadata.
 
 **Issues**
 - status never read from live hardware (only offline)

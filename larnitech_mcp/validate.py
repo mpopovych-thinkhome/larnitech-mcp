@@ -1,19 +1,20 @@
 """Pre-flight checks for `status-set`.
 
-Deliberately narrow. The device-type wiki is the source of truth for how a
-type behaves, and `set_device` attaches that type's own quirk list to every
-preview — so this module does **not** try to mirror the wiki. It only
-encodes the handful of facts that are (a) confirmed live, (b) mechanically
-checkable, and (c) cause a *silent* wrong result rather than an error the
-controller would report itself.
+`set_device` writes as soon as these pass, so this is the gate: a malformed
+or out-of-range command is rejected here and never reaches the controller.
 
-Anything softer than that belongs in the docs, not here: a second copy of
-the rules in code drifts from the wiki, and a stale rule is worse than no
-rule (this module previously shipped a `valve` warning that recommended the
-opposite of what live testing later established).
+Every rule encodes a value **documented** in the device-type wiki — a
+vocabulary, a range, a read-only type, or a confirmed silent-failure trap.
+Where the device reports its own bound (an AC's `t-min`/`t-delta`, a
+climate zone's `modes`), that wins over any default, since widgets are
+configured individually. Undocumented keys and types pass through
+unchecked rather than guessed at: a second copy of the rules drifts from the
+wiki, and a stale rule is worse than no rule (this module once shipped a
+`valve` warning that recommended the opposite of what live testing later
+established). Change a rule here only together with its doc.
 
 `check` returns (errors, warnings): errors block the write, warnings ride
-along in the preview so the user sees them before confirming.
+along in the result.
 """
 from __future__ import annotations
 
@@ -34,7 +35,33 @@ PERCENT_KEYS = {
     "fancoil": ("fan",),
     "vent": ("fan",),
     "blinds": ("position", "target"),
+    "speaker": ("volume",),
 }
+
+# Documented read-only: a write has nothing to land on.
+READ_ONLY_TYPES = (
+    "humidity-sensor", "co2-sensor", "illumination-sensor", "percent-sensor",
+    "float-sensor", "current-sensor", "voltage-sensor",
+    "mic", "security-card-reader", "rtsp",
+)
+
+# `state` documented as plain on/off.
+ON_OFF_TYPES = (
+    "ac", "climate-control", "dimmer-lamp", "lamp", "light-scheme", "script", "ventilation",
+)
+
+CLIMATE_MODES = ("heat", "cool", "auto")  # climate-control, confirmed live
+
+SETPOINT_TYPES = ("ac", "conditioner", "fancoil", "valve-heating", "climate-control", "ventilation")
+SETPOINT_KEYS = ("target", "setpoint-heat", "setpoint-cool", "setpoint-warm-floor")
+
+# AC setpoint bounds when the widget does not report its own (XML defaults).
+AC_T_MIN, AC_T_DELTA = 16.0, 16.0
+
+# An unrecognised speaker `state` is not rejected by the controller — it
+# drives the widget into `error` (BUG-009). Only the confirmed vocabulary.
+SPEAKER_STATES = ("play", "playing", "pause", "stop", "next", "previous")
+SPEAKER_PRIORITY = (0, 250)
 
 # Motorized types read their position as a participle but are driven with a
 # verb. Writing the read vocabulary back is acked with success:true and then
@@ -62,6 +89,18 @@ def check_addr(addr: str) -> list[str]:
     return []
 
 
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _bound(raw, default: float) -> float:
+    """A device-reported bound (sent as a string, e.g. "10"), or the default."""
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 def is_hex_only(device: dict) -> bool:
     dtype = (device.get("type") or "").lower()
     sub_type = (device.get("sub-type") or device.get("sub_type") or "").lower()
@@ -83,6 +122,10 @@ def check(device: dict, status: dict) -> tuple[list[str], list[str]]:
     dtype = (device.get("type") or "").lower()
     sub_type = (device.get("sub-type") or device.get("sub_type") or "").lower()
     current = device.get("status") if isinstance(device.get("status"), dict) else {}
+
+    if dtype in READ_ONLY_TYPES:
+        errors.append(f"{dtype} is read-only — there is nothing to write to")
+        return errors, warnings
 
     if is_hex_only(device):
         label = f"{dtype}/{sub_type}" if sub_type else dtype
@@ -118,6 +161,45 @@ def check(device: dict, status: dict) -> tuple[list[str], list[str]]:
                 f"Writing the read vocabulary back is acknowledged with success:true and then "
                 f"silently ignored — the device never moves"
             )
+
+    if dtype in ON_OFF_TYPES and "state" in status and status["state"] not in ("on", "off"):
+        errors.append(f"{dtype}.state is \"on\" or \"off\", got {status['state']!r}")
+
+    if dtype in SETPOINT_TYPES:
+        for key in SETPOINT_KEYS:
+            if key in status and not _number(status[key]):
+                errors.append(f"{dtype}.{key} is a temperature in °C — a number, got {status[key]!r}")
+
+    if dtype == "ac" and _number(status.get("target")):
+        low = _bound(device.get("t-min"), AC_T_MIN)
+        high = low + _bound(device.get("t-delta"), AC_T_DELTA)
+        if not low <= status["target"] <= high:
+            errors.append(
+                f"ac.target {status['target']!r} is outside this unit's range "
+                f"{low:g}..{high:g} °C (t-min + t-delta)"
+            )
+
+    if dtype == "climate-control" and "mode" in status:
+        value = status["mode"]
+        if value not in CLIMATE_MODES:
+            errors.append(f"climate-control.mode is one of {', '.join(CLIMATE_MODES)}, got {value!r}")
+        elif isinstance(device.get("modes"), list) and value not in device["modes"]:
+            warnings.append(
+                f"mode {value!r} is not in this zone's modes {device['modes']} — if the active "
+                "automation cannot do it, the zone silently does nothing"
+            )
+
+    if dtype == "speaker":
+        if "state" in status and status["state"] not in SPEAKER_STATES:
+            errors.append(
+                f"speaker.state accepts {', '.join(SPEAKER_STATES)}, got {status['state']!r} — "
+                "anything else is not rejected but drives the widget into `error` (BUG-009)"
+            )
+        if "priority" in status:
+            low, high = SPEAKER_PRIORITY
+            value = status["priority"]
+            if not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high:
+                errors.append(f"speaker.priority is an integer {low}-{high}, got {value!r}")
 
     if dtype in ("ac", "conditioner") and "fan" in status:
         value = status["fan"]

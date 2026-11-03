@@ -1,6 +1,6 @@
 <a id="ac"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#ac) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#ac) — keep those in sync.
 
 ## XML attributes
 
@@ -51,11 +51,11 @@ Read/write via `status-get`/`status-set` (API2), `status:"detailed"` required fo
 
 Read: 9 bytes ([BUG-004](../bugs.md#bug-004) — vendor wiki says 8, verified working with 9)
 
-- byte 0 — status: bit0 on/off, bits4-7 mode as a number (0 fan, 1 cool, 2 dry, 3 heat, 4 auto)
-- byte 1 — fan speed
+- byte 0 — status: bit0 on/off, bits4-7 mode as a number (0 fan, 1 cool, 2 dry, 3 heat, 4 auto). Events may come with bit 3 set although the script sent it clear (`0x39` for a sent `0x31`, same setpoint, exciter `0:0`; object 200, 2026-10-29, IGLU climate widgets and a Komfovent AC, both also driven by other scripts) — who sets it, the server or the other script, is not known. Compare `opt(0) & 0xF1` (mode + on/off)
+- byte 1 — 0 in working scripts (the vendor wiki calls it fan speed — not what the app uses)
 - byte 2 — setpoint, °C, integer
-- byte 3 — reserved
-- byte 4 — reserved
+- byte 3 — 0 in working scripts
+- byte 4 — **fan speed**: 0 auto, 1…5 speeds — confirmed in WallPanel_ISMA (`10_Scripts/33`), Sauna (`13`), HeatPump_Nibe (`35`) on hardware
 - byte 5 — current temp, fractional part: `(t%10)*250/10`
 - byte 6 — current temp, integer part: `t/10`
 - byte 7 — reserved
@@ -66,11 +66,13 @@ V-ID/WGT_AC {
     u8 state = opt(0) & 0x01;
     u8 mode  = (opt(0) >> 4) & 0x0F;
     u8 sp    = opt(2);
-    u8 fan   = opt(1);
+    u8 fan   = opt(4);
 }
 ```
 
-Write: `setStatus(WGT_AC, {(mode<<4)+state, fan, setpoint, 0, 0, (temp%10)*250/10, temp/10, 0, alarm}, 9)`
+Write: 5 bytes when the widget has `temperature-sensors` (the current temperature comes from the linked sensor) — `setStatus(WGT_AC, {(mode<<4)+state, 0, setpoint, 0, fan}, 5)`; otherwise 9 — `setStatus(WGT_AC, {(mode<<4)+state, 0, setpoint, 0, fan, (temp%10)*250/10, temp/10, 0, alarm}, 9)`.
+
+An app or scene command comes back the same way as the script's own `setStatus` — tell them apart by comparing with what the widget shows: the script-authoring notes.
 
 ## Notes
 

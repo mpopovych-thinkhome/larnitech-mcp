@@ -1,6 +1,6 @@
 <a id="current-sensor"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#current-sensor) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#current-sensor) — keep those in sync.
 
 ## XML attributes
 

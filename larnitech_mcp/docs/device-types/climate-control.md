@@ -1,13 +1,30 @@
 <a id="climate-control"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#climate-control) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#climate-control) — keep those in sync.
 
 ## XML attributes
 
-No dedicated page found under `wiki.larnitech.com` for a `climate-control`
-type (the official `/Xml` index does not list it separately — it may be
-covered generically or under a different name). Not documented here until
-found — do not invent attributes.
+No vendor page. Taken from production configs exported off a controller (2026-10-14) — the
+shape the controller itself writes:
+
+```xml
+<item addr="117:250" type="climate-control" name="..." automation="Winter" hw="def='last'"
+      warm-floor-sensors="119:5">            <!-- or temperature-sensors="117:34;117:35" -->
+    <automation name="Winter" setpoint-heat="25" setpoint-cool="27" setpoint-warm-floor="26"
+                setpoint-dry="80" setpoint-humidify="50" setpoint-co2="1000">
+        <alg preset="default"/>
+        <device addr="117:3"><warm-floor range="0-100"/></device>   <!-- or <heat range="0-100"/> -->
+    </automation>
+    <automation name="Summer" ...>
+        <alg preset="default"/>
+        <device addr="103:5"><warm-floor range="0-100"/></device>
+    </automation>
+</item>
+```
+
+- Each automation lists its own output devices — one zone can drive different circuits per preset (water floor in Winter, electric mat in Summer).
+- A driven `valve-heating` carries `climate-control="<climate addr>"` and no `automation` attribute of its own (the climate drives it); a circuit used only in another preset stays in manual mode. Leaving it in `always-off` blocks the climate from switching it on.
+- `state` is not part of the XML: a climate-control added by importing a config comes up **off** and has to be switched on.
 
 ## API
 
@@ -23,10 +40,11 @@ found — do not invent attributes.
   `status-get`) — a **smaller** lexicon than `AC`/`fancoil`'s `mode` (no
   `dry`/`fan`). `"auto"` is the specific unconstrained sentinel, not just
   "key absent" — see the gating note below.
+- `setpoint-warm-floor` / `current-warm-floor` / `pid-warm-floor` — the same three for a zone with `warm-floor-sensors`.
 
 ## Script
 
-Not documented — no confirmed byte-level layout for this type yet.
+No byte-level layout. Driven from a script through the server: automation by name via `SRV-ID:102`, setpoints via a `status-set` request on `SRV-ID:108` — see separate notes on script requests to the server.
 
 ## Notes
 
@@ -38,6 +56,10 @@ than a vendor-fixed hardware type. Confirm with a live device before adding
 more here.
 
 <!-- Add live-tested quirks here as found. -->
+
+- (2026-10-14) **Warm-floor zones report their own keys:** `setpoint-warm-floor`, `current-warm-floor` (floor probe from `warm-floor-sensors`) and `pid-warm-floor` (0-100 demand), instead of the `-temperature` set. Seen live on five zones; a zone switched on reacted within a second (`pid-warm-floor` 0 → 13, its water circuit turned on).
+- (2026-10-14) **Snapshots do carry setpoints in a heating preset.** With `Winter` active (`setpoint-heat` in the preset), `list_devices` returned `setpoint` and `setpoint-heat` — so the 2026-08-18 "snapshots never carry setpoints" reading depends on the preset, as suspected below.
+- (2026-10-14) **`setpoint-heat` via a script `status-set` (`SRV-ID:108`) and automation by name via `SRV-ID:102` confirmed live** — preset `Winter` ↔ `Summer` switched back and forth, `setpoint-heat` followed the master each time. `state` and `setpoint-warm-floor` through the same request are written by a production script but not yet verified.
 
 - (2026-08-18) The optional `mode` key constrains what the *currently active automation* is allowed to do, it does not select a mode on its own. If the active automation supports both heating and cooling, setting `mode` (e.g. `heat`) restricts it to just that one. If the active automation does not support the requested mode at all (e.g. `mode: heat` while the automation can only cool), the zone does nothing and carries no setpoint — behaviour is capability-gated by the automation, not by `mode` itself. `mode` is absent unless explicitly constrained.
 

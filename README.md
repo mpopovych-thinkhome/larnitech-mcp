@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.mpopovych-thinkhome/larnitech-mcp -->
 
-**Version 1.3.3 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
+**Version 1.4.0 Beta** · [Changelog](CHANGELOG.md) · MIT licensed
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent read
 and control a [Larnitech](https://larnitech.com) smart-home installation over
@@ -62,12 +62,12 @@ physically offline still answers.
 A watch keeps its own connection alive, so it survives the controller's
 5-minute idle timeout and can stay open across a long conversation.
 
-**Writing** — off by default, two-phase, and never a single tool call.
+**Writing** — off by default; one call, checked before and after.
 
 | Tool | What it does |
 |---|---|
-| `set_device` | validate, preview the change, return a token — **does not write** |
-| `confirm_set` | execute, then wait for the device to settle and report what actually landed |
+| `set_device` | validate, write, wait for the device to settle, report what actually landed |
+| `modbus_request` | one raw Modbus RTU/TCP exchange on a `com-port`: read (FC 03/04) or write (FC 06/16) registers |
 
 **Learning** — findings survive the session.
 
@@ -234,11 +234,17 @@ python -m larnitech_mcp allow-write "Home" on
 There is deliberately no tool for this — an agent cannot grant itself
 write access, only tell you the command.
 
-**Every write is two calls.** `set_device` validates the payload, reads
-current state, and returns a preview plus a single-use token; it never
-touches the controller. `confirm_set(token)` performs the write, waits for
-the device to go quiet, then reports what actually landed, including
-`unrequested_changes` — anything the controller altered on its own.
+**Every write is checked before it is sent.** `set_device` validates the
+payload against the documented vocabulary and ranges for that type — an
+`on`/`off` key gets only `on`/`off`, an AC setpoint stays inside the range
+the unit itself reports, a read-only sensor takes nothing — and rejects a
+malformed or out-of-range command without touching the controller.
+
+**And checked after it lands.** An ack only means the command was accepted;
+some types ack a write and then ignore it. So `set_device` waits for the
+device to go quiet and reads it back: `mismatched` lists requested keys that
+did not take, `unrequested_changes` anything the controller altered on its
+own.
 
 **Writes can be sequences,** because some types cannot be driven with one
 frame:
@@ -295,6 +301,22 @@ Beta. Reading, watching, and writing all work and have been exercised
 against live hardware, but this has been tested against a limited set of
 installations. Device types documented as unconfirmed genuinely are —
 see `get_docs` output and the per-type files.
+
+### Modbus on a `com-port`
+
+`modbus_request` sends one frame — slave, function 03/04/06/16, register,
+count or values — onto the bus behind a `com-port` and returns the decoded
+answer. Reads work on any object; writes need `allow_write`. Modbus TCP ports
+take the same frame as RTU, CRC included (assumed; verified on RTU only).
+
+The port may be in use by the controller's own scripts, so other requests
+can be on the bus at the same time, and an answer can belong to someone
+else's request rather than yours — observed live. One request is the
+default; when a value really matters, send the same request twice about a
+second apart and trust it only if both answers agree. A device that does not
+answer within 2 s is reported as a timeout, never as the port's last known
+frame. Details:
+[com-port](larnitech_mcp/docs/device-types/com-port.md).
 
 Not affiliated with or endorsed by Larnitech.
 

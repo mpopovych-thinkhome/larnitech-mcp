@@ -1,6 +1,6 @@
 <a id="light-scheme"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#light-scheme) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#light-scheme) — keep those in sync.
 
 ## XML attributes
 

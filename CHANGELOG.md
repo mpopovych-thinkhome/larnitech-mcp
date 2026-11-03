@@ -1,6 +1,83 @@
 Every change bumps the version here and gets an entry — agreed before it
 lands, not after.
 
+## 1.4.0 Beta — 2026-11-03
+
+**Breaking: `confirm_set` is gone — `set_device` writes.** The two-phase
+write was meant to put a human between the preview and the controller. In
+practice it did not: an agent bulk-switching 31 climate zones issued 31
+previews and then confirmed them in two batches of 13 and 18, and nobody
+read any of them. The token was one more call per write and nothing more.
+What actually protects a controller stays: `allow_write` per object, set
+only from a terminal; the client's own permission check on every tool call;
+and validation, which now rejects a bad command outright instead of
+previewing it.
+
+The half of `confirm_set` that mattered moves into `set_device` unchanged:
+after the write it waits for the device to go quiet, reads it back, and
+reports `mismatched` and `unrequested_changes`. That is how a gate that acks
+`closed` and never moves, or a fancoil that drops `state` behind a `mode`
+change, still shows up.
+
+**Modbus RTU/TCP on a `com-port`: `modbus_request`.** One exchange per
+call — read holding or input registers (FC 03/04) or write one or several
+(FC 06/16). The frame goes out as the port's legacy string status with its
+CRC, the only form a `com-port` passes onto the bus, and the answer is picked
+out of the port's events by slave, function, size and CRC. A Modbus
+exception comes back as an error with its code; a silent device as a
+timeout, never as the port's last known frame. Because the controller reports
+only a change of the port's last frame, an answer identical to the one
+already there would never arrive — so when the port holds something that
+reads as our answer, a harmless read of a different size moves it first.
+Reads work on any object; writes need `allow_write`. Framing is shared with
+the Home Assistant integration, which verified it on the same bus.
+
+The port is usually shared with the controller's own scripts, and an answer
+can belong to their request rather than ours — seen live, one read in twelve
+returned another register's value. The tool says so to the agent: one
+request by default, and the same request twice about a second apart when the
+value really matters.
+
+Verified live on an installation's RS-485 port: a read, then a write of 36
+echoed and read back, then the original 35 restored and read back. Modbus
+TCP is assumed to take the same frame and is not verified.
+
+**Writes are checked against documented ranges and vocabulary.** A
+malformed or out-of-range command is rejected before anything is sent:
+
+- `on`/`off` keys accept only `on`/`off` (`ac`, `climate-control`, `lamp`,
+  `dimmer-lamp`, `light-scheme`, `script`, `ventilation`);
+- setpoints (`target`, `setpoint-heat`/`-cool`/`-warm-floor`) must be
+  numbers, and an AC's `target` must sit inside the range the unit itself
+  reports as `t-min` + `t-delta` — 16..32 °C when it reports none;
+- `climate-control.mode` is `heat`/`cool`/`auto`, with a warning when the
+  zone's own `modes` list does not include it;
+- `speaker.state` takes only `play`, `playing`, `pause`, `stop`, `next`,
+  `previous` — anything else is not rejected by the controller but drives
+  the widget into `error` (BUG-009) — `volume` 0-100, `priority` 0-250;
+- sensors, `mic`, `security-card-reader` and `rtsp` are read-only.
+
+Every rule comes from a documented value; undocumented keys and types pass
+through unchecked rather than guessed at.
+
+**BUG-012** joins the registry: a `<protect>` watching a `lamp` holds its
+host at `status` even when the lamp is not in the condition state.
+
+**Docs.** `ac` now gives the script's fan speed in byte 4 — the byte that
+working scripts on three installations read and write — not byte 1 as the
+vendor page says, and documents the 5-byte write used when the widget has a
+linked temperature sensor. `temperature-sensor` gives a write formula that
+keeps negative values right: the usual `{(t%10)*256/10, t/10}` shows −5.3 °C
+as −4.3 °C, because C division truncates toward zero; the integer byte must
+be rounded down. `script` and `com-port` point at the maintainer's script
+notes in prose.
+
+**Fixed: the release build stopped on five links.** The maintainer's
+knowledge base moved its script-authoring notes, so the link rewrites the
+build applies to the shipped docs no longer matched and five device-type
+pages linked outside the package. The rewrites follow the new locations;
+the build's own link check passes again.
+
 ## 1.3.3 Beta — 2026-09-09
 
 **Docs.** Every type file and every bug entry now carries an explicit

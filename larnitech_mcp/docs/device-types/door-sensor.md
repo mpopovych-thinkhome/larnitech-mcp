@@ -1,6 +1,6 @@
 <a id="door-sensor"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#door-sensor) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#door-sensor) — keep those in sync.
 
 ## XML attributes
 
@@ -36,6 +36,11 @@ assume plain contact behavior without checking `sub-type` first.
 - (2026-08-20) Sub-type enum and XML dispatch confirmed live on
   `a1b2c3d4`; only `contact`'s "open" reporting confirmed at the value
   level. Status key shape unconfirmed.
+- (2026-11-03) A two-state indicator with its own picture: no `sub-type`,
+  `image="valve-3"` (3-way valve), `text="<state 0>;<state 1>"` — seen live
+  on object 190 (`486:30` «Клап ТН/Газ»); a script sets it with one byte
+  `setStatus(addr, {v})`, as the alarm door-sensors (HeatPump_Daikin V0.3,
+  `WGT_3WAY_VALVE`: `Climate;Hot water`).
 
 ## Known bugs
 

@@ -1,6 +1,6 @@
 <a id="valve-heating"></a>
 
-Digest of this file lives in [device_types.md](_device_types.md#valve-heating) — keep both in sync.
+Index entry (status keys and issue titles only): [_device_types.md](_device_types.md#valve-heating) — keep those in sync.
 
 ## XML attributes
 
@@ -119,7 +119,7 @@ or the literal `always-off`. Target addr uses plain `"ID:SID"` (decimal,
 
 Numeric index `N` in `as:N` is the same value read back from bits4-7 of the
 1-byte event status (`[ADDR.0] >> 4`) — confirmed live in a real production
-script, `MasterSlaveValveHeating_V2_4.txt` (`scripts/Скрипты сапорта
+script, `MasterSlaveValveHeating_V2_4.txt` (`scripts/ready-scripts/Скрипты сапорта
 Larnitech/Разные/Разные/`): it reads a master valve-heating's automation
 index with `[MASTER.0]>>4` and re-applies it to slave devices with
 `setStatus(1000:102, "ID:SID\0as:<index>")`. Preset-index-to-name mapping
@@ -150,6 +150,8 @@ defines an `<automation>` block.
 - (2026-08-18) **Resetting `automation` to manual and turning the channel off must be TWO separate, spaced-out `status-set` calls, not one combined write.** Confirmed live on `1:5` (had a named preset active, `state: "on"`): `{"automation": "", "state": "off"}` in one call, and two separate calls sent immediately back-to-back, both end with `automation` cleared (confirmed via a fresh `status-get`, not just the write ack) but `state` still `"on"`. The controller appears to re-evaluate the channel's own on/off logic right after an automation is cleared, and that re-evaluation turns it back on — landing *after* an `off` that arrived too soon in the same burst. Working sequence: write `{"automation": ""}` alone, wait **~1s**, then write `{"state": "off"}` alone. Confirmed working with exactly this pacing. Same mechanism reproduced on [fancoil](fancoil.md) and [vent](vent.md).
 - (2026-09-03) **Manual mode via script is `as:-4`, not `as:-3`**: `setStatus(1000:102, "ID:SID\0as:-4")` confirmed live to switch a valve-heating circuit to Manual; `as:-3` (the value the language doc's own numeric-shortcut table lists for manual) does **not** work. Same mechanism confirmed identical on fancoil.
 - (2026-08-18) Writing `automation: ""` (empty string) to return to manual mode is now **confirmed working** — the key disappears from `status` entirely on the next read, matching the "absent = manual" read-side convention documented above. (`"always-off"` as a write value was confirmed later — see the 2026-09-15 entry.)
+- (2026-10-19) **`ts:<N>` via `1000:102` rewrites the preset temperature in the config, not a runtime target.** Seen live on every `ts:` sent: `[valve-h ID:SID] set automation setpoint to 21 (Comfort)`, then `logic.xml was saved`, `start logic preparing (Climate automation is changed)` and the logic table of the valve's own module re-sent over CAN (~2.3 KB, with occasional `Recv logic CRC ... instead of ...` retries). Each setpoint change is a config save plus a logic reload of that module — avoid frequent `ts:` (debounce), and a script running on the valves' module sits on the module being reloaded.
+- (2026-10-14) **`setStatus(1000:102, buf)` takes the whole buffer, not the string up to the first `\0`, and reads every `\0`-separated field.** Seen live on object 202: a shared `u8 req[160]` first held a climate-control JSON request, then `sprintf(req, "%d:%d%cts:%d", ...)` wrote `118:5\0ts:24\0` over its start — the leftover tail (`status-set', 'addr':...`) arrived as a third field and became the circuit's automation name on 9 circuits (`target` 24 still applied). Clear the buffer before every request (loop over the full size), or keep a separate buffer that only ever holds `ID:SID\0command`.
 - (2026-09-15) **`"always-off"` as a write value is confirmed working.** A single `{"automation": "always-off"}` write is enough — no two-step sequence, unlike clearing an automation. The controller then drops the channel itself: `state` goes `on` → `off` without being asked (arrives as an unrequested change a beat after the write), and `target` disappears from `status`, same as in manual. Verified on five `valve-heating` channels in one pass, each read back from an independent `status-get` afterwards.
 
 ## Known bugs
